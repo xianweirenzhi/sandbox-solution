@@ -6,10 +6,12 @@
 
 基于 PlatformIO + Arduino 框架的 ESP8266 开发板测试项目，用于验证开发板基本功能（GPIO 输出、串口通信）。
 
+**GitHub 仓库**：<https://github.com/xianweirenzhi/sandbox-solution> （公开，代码与此目录同步）
+
 ## 硬件信息
 
 | 项 | 值 |
-|---|---|
+| --- | --- |
 | 开发板 | Adafruit HUZZAH ESP8266 |
 | 平台 | espressif8266（PlatformIO） |
 | 框架 | Arduino |
@@ -23,7 +25,7 @@
 
 ## 目录结构
 
-```
+```text
 esp8266/
 ├── src/main.cpp        # 主程序（LED 闪烁 + 串口测试）
 ├── include/            # 头文件（当前为空）
@@ -51,5 +53,6 @@ pio device monitor       # 打开串口监视器（115200）
 ## 更新记录
 
 | 日期 | 变更内容 |
-|---|---|
+| --- | --- |
 | 2026-09-01 | 创建项目；实现 LED 闪烁 + 串口测试程序，编译通过 |
+| 2026-09-01 | 建立 Git 仓库并推送至 GitHub（sandbox-solution，公开），此后代码变更同步推送 |
