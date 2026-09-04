@@ -27,6 +27,7 @@
 #define PORT_COUNT       6      // 端口数量
 #define PORT_CLIENTS_MAX 3      // 每端口允许接入的最大从机数
 #define PORT_LOG_LINES   8      // 每端口在网页上保留的收发记录条数
+#define PORT_RX_TIMEOUT_MS 200  // 不完整帧(缺帧尾'/')的静默超时兜底(ms)
 
 // ---------- AP 兜底模式(路由器不可用时手机直连设备) ----------
 #define FALLBACK_AP_SSID  "ESP32-Direct"

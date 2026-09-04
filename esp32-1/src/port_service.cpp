@@ -1,13 +1,18 @@
 #include "port_service.h"
 
+#include <errno.h>
+#include <lwip/sockets.h>   // recv / MSG_DONTWAIT / EWOULDBLOCK
+
 namespace port_service {
 
-// 每个通信端口的运行上下文
+// 帧协议约定: '@' 为帧头, '/' 为帧尾, 两者之间为命令有效内容
 struct PortCtx {
   uint16_t    port = 0;
   WiFiServer *server = nullptr;
   WiFiClient  clients[PORT_CLIENTS_MAX];   // 已接入的从机连接
-  String      rxPartial;                   // 未遇到换行的半行数据
+  String      rxFrame;                     // '@' 与 '/' 之间累积的命令内容
+  bool        inFrame = false;             // 是否已收到帧头 '@'
+  uint32_t    rxLastByteMs = 0;            // 上次收到字节时间(不完整帧超时兜底)
   String      log[PORT_LOG_LINES];         // 收发记录环形缓冲
   uint8_t     logHead = 0, logLen = 0;
   uint32_t    rxCount = 0, txCount = 0;
@@ -32,20 +37,50 @@ static void pushLog(PortCtx &p, const String &line) {
   if (p.logLen < PORT_LOG_LINES) p.logLen++;
 }
 
+// 统计当前有效的连接数(以 fd 是否有效为准,避免 connected() 的 errno 副作用)
 static uint8_t countClients(PortCtx &p) {
   uint8_t n = 0;
   for (auto &c : p.clients)
-    if (c && c.connected()) n++;
+    if (c.fd() >= 0) n++;
   return n;
 }
 
 // 识别从机上线报文 "F8266-x online",x 为从机编号
-static void parseOnline(PortCtx &p, const String &line) {
+static void parseOnline(PortCtx &p, const String &cmd) {
   int id = 0;
-  if (sscanf(line.c_str(), "F8266-%d online", &id) == 1 && id > 0 && id < 100) {
+  if (sscanf(cmd.c_str(), "F8266-%d online", &id) == 1 && id > 0 && id < 100) {
     p.slave = "F8266-" + String(id);
     p.online = true;
     pushLog(p, timeStamp() + " ★ " + p.slave + " 已上线");
+  }
+}
+
+// 端口内无连接时,若曾上线则标记离线
+static void markOfflineIfEmpty(PortCtx &p) {
+  if (countClients(p) == 0 && p.online) {
+    p.online = false;
+    pushLog(p, timeStamp() + " ○ " +
+                        (p.slave.length() ? p.slave : String("从机")) + " 已离线");
+  }
+}
+
+// 处理完整一帧(帧头 '@' 与帧尾 '/' 之间)的命令
+static void handleCommand(PortCtx &p) {
+  String cmd = p.rxFrame;
+  p.rxFrame = "";
+  p.inFrame = false;
+  cmd.trim();
+  if (!cmd.length()) return;
+  p.rxCount++;
+  parseOnline(p, cmd);
+  pushLog(p, timeStamp() + " ← @" + cmd + "/");
+}
+
+// 不完整帧兜底:帧内数据静默超过 PORT_RX_TIMEOUT_MS 即视为帧结束
+static void flushRxIfTimeout(PortCtx &p) {
+  if (p.inFrame && p.rxFrame.length() > 0 &&
+      (millis() - p.rxLastByteMs) >= PORT_RX_TIMEOUT_MS) {
+    handleCommand(p);
   }
 }
 
@@ -54,7 +89,7 @@ static void acceptClients(PortCtx &p) {
   while (WiFiClient c = p.server->available()) {
     bool placed = false;
     for (auto &slot : p.clients) {
-      if (!(slot && slot.connected())) {  // 复用空槽位
+      if (slot.fd() < 0) {  // 空槽位(fd 无效)
         slot = c;
         placed = true;
         break;
@@ -62,38 +97,49 @@ static void acceptClients(PortCtx &p) {
     }
     if (placed) {
       pushLog(p, timeStamp() + " ● 从机接入 " + c.remoteIP().toString());
-    } else {                              // 超出每端口上限,拒绝
+      Serial.printf("[Port %u] 接入 fd=%d ip=%s\n", p.port, c.fd(),
+                    c.remoteIP().toString().c_str());
+    } else {  // 超出每端口上限,拒绝
       c.stop();
       pushLog(p, timeStamp() + " ✕ 拒绝接入(端口已满) " + c.remoteIP().toString());
     }
   }
 }
 
-// 读取一行行报文;检测从机断开
+// 用底层 recv 直读 + 帧状态机解析;以 recv 返回值判断断开与无数据
 static void readClients(PortCtx &p) {
   for (auto &slot : p.clients) {
-    if (!slot) continue;
-    if (!slot.connected()) {              // 从机断开
-      slot.stop();
-      if (countClients(p) == 0 && p.online) {
-        p.online = false;                 // 端口已无任何连接 -> 从机离线
-        pushLog(p, timeStamp() + " ○ " + (p.slave.length() ? p.slave : String("从机")) + " 已离线");
-      }
-      continue;
-    }
-    while (slot.available() > 0) {
-      char ch = slot.read();
-      if (ch == '\n') {                   // 收到完整一行报文
-        String line = p.rxPartial;
-        p.rxPartial = "";
-        line.trim();
-        if (line.length()) {
-          p.rxCount++;
-          parseOnline(p, line);
-          pushLog(p, timeStamp() + " ← " + line);
+    int fd = slot.fd();
+    if (fd < 0) continue;
+
+    while (true) {
+      char buf[128];
+      int n = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
+      if (n > 0) {                        // 收到数据,按帧解析
+        p.rxLastByteMs = millis();
+        for (int i = 0; i < n; i++) {
+          char ch = buf[i];
+          if (ch == '@') {                // 帧头:开始新帧(丢弃此前的不完整数据)
+            p.inFrame = true;
+            p.rxFrame = "";
+          } else if (ch == '/') {         // 帧尾:结束当前帧
+            if (p.inFrame) handleCommand(p);
+          } else if (p.inFrame) {         // 帧内有效内容
+            if (p.rxFrame.length() < 256) p.rxFrame += ch;  // 超长截断保护
+          }
         }
-      } else if (p.rxPartial.length() < 256) {  // 超长行截断保护
-        p.rxPartial += ch;
+        continue;                         // 可能还有更多数据
+      } else if (n == 0) {                // 对端关闭连接
+        slot.stop();
+        markOfflineIfEmpty(p);
+        break;
+      } else {                            // n < 0
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+          break;                          // 无更多数据,正常
+        }
+        slot.stop();                      // 其他错误,关闭
+        markOfflineIfEmpty(p);
+        break;
       }
     }
   }
@@ -115,6 +161,7 @@ void loop() {
   for (auto &p : s_ports) {
     acceptClients(p);
     readClients(p);
+    flushRxIfTimeout(p);   // 不完整帧的超时兜底
   }
 }
 
@@ -123,15 +170,16 @@ bool send(uint8_t idx, const String &text) {
   PortCtx &p = s_ports[idx];
   uint8_t sent = 0;
   for (auto &slot : p.clients) {
-    if (slot && slot.connected()) {
-      slot.print(text);
-      slot.print('\n');                   // 行式协议,自动补换行
+    if (slot.fd() >= 0) {
+      slot.print('@');                    // 帧头
+      slot.print(text);                   // 命令有效内容
+      slot.print('/');                    // 帧尾
       sent++;
     }
   }
   if (sent > 0) {
     p.txCount++;
-    pushLog(p, timeStamp() + " → " + text);
+    pushLog(p, timeStamp() + " → @" + text + "/");
   }
   return sent > 0;                        // false = 该端口当前无在线从机
 }
