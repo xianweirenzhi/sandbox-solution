@@ -29,6 +29,9 @@
 #define PORT_LOG_LINES   8      // 每端口在网页上保留的收发记录条数
 #define PORT_RX_TIMEOUT_MS 200  // 不完整帧(缺帧尾'/')的静默超时兜底(ms)
 
+// ---------- 板载 RGB 灯(NeoPixel/WS2812,GPIO48) ----------
+#define RGB_LED_PIN  48   // 板载 NeoPixel 数据线,当前仅拉低保持熄灭
+
 // ---------- AP 兜底模式(路由器不可用时手机直连设备) ----------
 #define FALLBACK_AP_SSID  "ESP32-Direct"
 #define FALLBACK_AP_PASS  "88888888"

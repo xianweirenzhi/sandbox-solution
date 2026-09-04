@@ -59,6 +59,10 @@ static void printConnectionInfo(const DeviceStatus &s) {
 }
 
 void setup() {
+  // 板载 RGB 灯拉低熄灭(上电尽早拉低,避免灯误亮)
+  pinMode(RGB_LED_PIN, OUTPUT);
+  digitalWrite(RGB_LED_PIN, LOW);
+
   Serial.begin(SERIAL_BAUD);
   delay(1000);  // 等待 USB 串口就绪
   Serial.println();

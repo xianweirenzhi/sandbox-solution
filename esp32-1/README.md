@@ -84,6 +84,8 @@ pio device monitor     # 串口监视
 | `PORT_COUNT` | `6` | 端口数量（网页 2×3 卡片与之对应） |
 | `PORT_CLIENTS_MAX` | `3` | 每端口最大接入从机数 |
 | `PORT_LOG_LINES` | `8` | 每端口网页保留的收发记录条数 |
+| `PORT_RX_TIMEOUT_MS` | `200` | 不完整帧（缺帧尾 `/`）的静默超时兜底（ms） |
+| `RGB_LED_PIN` | `48` | 板载 NeoPixel RGB 灯数据线（当前仅拉低保持熄灭） |
 | `FALLBACK_AP_SSID` | `"ESP32-Direct"` | 兜底热点名称 |
 | `FALLBACK_AP_PASS` | `"88888888"` | 兜底热点密码 |
 | `FALLBACK_AP_IP` | `192.168.4.1` | AP 模式设备 IP（网页访问地址） |
