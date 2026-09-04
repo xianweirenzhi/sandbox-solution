@@ -10,12 +10,17 @@
 #define STA_PASS        "88888888"     // 目标 AP 的密码
 #define STA_TIMEOUT_MS  120000UL       // 2 分钟内连不上 -> 自动切换 AP 模式
 
-// ---------- STA 固定 IP(便于从机定位主机地址) ----------
-// !!! 须与路由器同网段,网关填路由器 IP,不同环境请修改 !!!
+// ---------- STA IP 获取方式 ----------
+// 0 = DHCP(由路由器自动分配,默认;IP 可能变化,以串口/网页显示为准)
+// 1 = 固定 IP(便于从机定位主机,须与路由器同网段,网关填路由器 IP)
+#define STA_USE_STATIC_IP  0
+
+#if STA_USE_STATIC_IP
 #define STA_STATIC_IP   IPAddress(192, 168, 4, 200)   // 本机固定 IP
 #define STA_GATEWAY     IPAddress(192, 168, 4, 1)     // 网关(路由器 IP)
 #define STA_NETMASK     IPAddress(255, 255, 255, 0)
 #define STA_DNS         IPAddress(192, 168, 4, 1)     // DNS(与网关相同即可)
+#endif
 
 // ---------- 从机通信 TCP 端口 ----------
 #define PORT_BASE        8000   // 起始端口(共 PORT_COUNT 个连续端口: 8000~8005)
