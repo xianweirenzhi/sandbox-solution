@@ -244,6 +244,7 @@ server.on("/api/led", HTTP_GET, []() {
 - **DHCP 下如何得知主机 IP**：上电后串口会打印实际分配的 IP，网页 `/api/status` 也返回；从机需先获得主机 IP 再连接
 - **`esp32s3.local` 打不开**：mDNS 依赖系统/浏览器支持，Windows 10+、iOS、macOS 一般可用，Android 常不支持，此时直接用 IP 访问
 - **AP 模式下手机显示「无法访问互联网」**：正常现象（设备热点本来就不提供外网），选择仍然连接即可
+- **板载 RGB 灯为什么只有一个引脚（GPIO48）**：该板载灯是 **NeoPixel/WS2812 智能灯**，单数据线串行协议（每颗灯珠内置驱动芯片，一根数据线即可控制 RGB 三色），并非传统需要 3 路 PWM 的共阴/共阳 RGB。上电拉低 `RGB_LED_PIN`（GPIO48）即可保持熄灭；如需点亮，配合 `Adafruit_NeoPixel` 库（`NEO_GRB + NEO_KHZ800`）向该引脚发数据即可
 - **WiFiManager 库去哪了**：AP 兜底 + 自有状态页已覆盖其门户功能，为保持精简已移除依赖；如需「网页改配 WiFi」可重新引入做按需门户
 
 ## 13. 维护约定
