@@ -8,16 +8,18 @@
  *      手机连接该热点后访问 192.168.4.1 打开同一状态页
  *
  * 模块划分(便于维护与扩展):
- *   config.h        全部可调参数
- *   wifi_service.*  WiFi 连接与模式切换
- *   device_status.* 状态采集(网页/串口共用)
- *   web_ui.*        网页服务
+ *   config.h         全部可调参数
+ *   wifi_service.*   WiFi 连接与模式切换(固定 IP)
+ *   device_status.*  状态采集(网页/串口共用)
+ *   port_service.*   从机通信:6 个连续 TCP 端口收发与上下线管理
+ *   web_ui.*         网页服务(状态卡 + 2x3 端口收发窗口)
  */
 #include <Arduino.h>
 #include <WiFi.h>
 
 #include "config.h"
 #include "device_status.h"
+#include "port_service.h"
 #include "web_ui.h"
 #include "wifi_service.h"
 
@@ -62,15 +64,17 @@ void setup() {
   Serial.println();
   Serial.println("===== ESP32-S3 STA/AP 双模式设备 =====");
 
-  wifi_service::begin();               // STA 优先,2 分钟超时自动切 AP
+  wifi_service::begin();               // STA 优先(固定 IP),2 分钟超时自动切 AP
 
   printConnectionInfo(collectStatus());
   web_ui::begin();                     // 两种模式下网页服务均可用
+  port_service::begin();               // 开启 6 个从机通信端口
 }
 
 void loop() {
   wifi_service::loop();
   web_ui::loop();
+  port_service::loop();                // 处理从机接入/收发/断开
 
   // 每 5 秒串口心跳,持续验证连接状态
   static uint32_t lastPrint = 0;

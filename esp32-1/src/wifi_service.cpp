@@ -23,6 +23,9 @@ static bool connectSTA() {
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);   // 掉线后自动重连
+  // 固定本机 IP,便于从机定位主机地址(须与路由器同网段,见 config.h)
+  WiFi.config(STA_STATIC_IP, STA_GATEWAY, STA_NETMASK, STA_DNS);
+  Serial.printf("[WiFi] 使用固定 IP: %s\n", STA_STATIC_IP.toString().c_str());
   WiFi.begin(STA_SSID, STA_PASS);
 
   uint32_t t0 = millis();
