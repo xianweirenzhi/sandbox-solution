@@ -25,7 +25,8 @@
 #define NET_LINK_RETRY_MS 3000UL           // 连接失败 / 断线后的重试间隔（毫秒）
 
 // ===================== 主机动态发现（esp32-1 UDP 广播）=====================
-// 主机可能是 DHCP 动态 IP，会周期向局域网 UDP 广播宣告（@ESP32HOST,<ip>,<base>,<count>）。
+// 主机可能是 DHCP 动态 IP，会周期向局域网 UDP 广播宣告（载荷 ESP32HOST,<ip>,<base>,<count>，
+// 无 @ 帧头；与主机 host_announce 的 HOST_ANNOUNCE_PREFIX 一致）。
 // 从机监听 NET_HOST_ANNOUNCE_PORT 即可动态获知主机 IP，无需写死；收到有效宣告自动切到
 // 发现地址；若超过 NET_HOST_DISCOVER_STALE_MS 再无宣告（主机离线/换网）则回退 NET_HOST_IP。
 #define NET_HOST_ANNOUNCE_PORT       45555    // 与主机 HOST_ANNOUNCE_PORT 一致
