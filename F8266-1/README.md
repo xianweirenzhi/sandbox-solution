@@ -12,6 +12,8 @@
 - 联网后作为 TCP 客户端连主机 [esp32-1](../esp32-1/)（端口 8000），连上即上报上线，并收发 `@命令/` 帧；
 - **主机动态发现**：主机的 IP 可能由 DHCP 动态分配，从机监听主机在局域网 UDP 端口 `45555` 的广播宣告（`ESP32HOST,<ip>,...`）自动获知主机当前 IP，无需写死；主机 IP 变化会自动跟随，超过 20s 未收到宣告则回退到 `net_config.h` 的硬编码地址。
 
+**业务定位（智慧农场）**：本机规划为智慧农场子系统的**状态节点**——逐步接入各农业子系统（传感器采集 / 执行控制等），本机 OLED 作为**状态可视化层**，最终汇总展示各子系统是否工作正常。当前完成该层的第一步：OLED 激活点亮。
+
 **命名约定**：设备身份、STA 主机名、配置热点名统一使用 `F8266-1`，与项目目录同名。该身份对应仓库 [esp32-1](../esp32-1/) 主机 6 路 TCP 从机端口中的 `F8266-x` 命名体系——F8266-1 接入主机 **8000** 端口。主机 IP 默认支持**动态发现**（监听主机 UDP 广播）；回退地址 `192.168.1.100` 仅在网络中无主机宣告时兜底（改主机 IP / 端口 / 广播参数只动 [net_config.h](src/net_config.h)，须保证与从机同一网段）。命令详细内容尚未定义，已留 `onHostCommand()` 扩展口待后续业务迭代填充。
 
 本项目位于仓库 [sandbox-solution](https://github.com/xianweirenzhi/sandbox-solution)（公开）的 `F8266-1/` 子目录——仓库为多板卡项目集合，其他板卡项目以同级目录存放，详见仓库根 [README](../README.md)。
@@ -27,6 +29,12 @@
 | 环境名（env） | `esp01_1m`（沿用早期命名，仅作构建标签） |
 | 串口波特率 | 115200 |
 
+**当前外设接线**（智慧农场逐步接入）：
+
+| 外设 | 接口 | 接线 |
+| --- | --- | --- |
+| OLED 0.96"（SSD1306） | I2C | SDA→板上 SDA（GPIO4）、SCL→板上 SCL（GPIO5）、VCC→3V3、GND→GND；I2C 地址 0x3C |
+
 ## 当前功能
 
 代码按职责拆分到独立模块，`main.cpp` 仅做编排（详见"目录结构"）：
@@ -37,6 +45,7 @@
 4. **串口日志**：串口打印联网全过程（SSID / IP / hostname / 各阶段状态），便于排障。
 5. **主机 TCP 链路**：联网后自动作为 TCP 客户端连主机 `:8000`，连上即发上线帧 `@F8266-1 online/`（主机网页对应端口变绿）；在线期间接收主机 `@…/` 命令帧并回调 `onHostCommand()`（命令内容留扩展口，当前仅串口打印）；主机离线自动按重试间隔重连，重连成功重新上报上线；WiFi 掉线期间链路自动暂停，恢复后重连。
 6. **主机动态发现**：`host_link` 监听主机 UDP 广播（端口 `45555`），收到 `ESP32HOST,<ip>,...` 宣告即把目标主机切到该 IP（连旧地址则断开重连）；超过 `NET_HOST_DISCOVER_STALE_MS`（20s）无宣告则回退 `NET_HOST_IP`。主机为 DHCP 动态 IP 时从机仍能自动找到它。
+7. **OLED 激活（业务层第一步）**：0.96" SSD1306（I2C：SDA=GPIO4、SCL=GPIO5，地址 0x3C）开机即点亮，首屏显示设备名 / 项目名 / `OLED OK`，作为智慧农场**状态可视化层**入口；后续各子系统健康与状态由本屏汇总展示（文字统一 ASCII/英文，暂不引入中文字库）。
 
 > 说明：凭据为硬编码默认值，重启后始终优先尝试 `ESP-TEST`；配置热点仅作断网/改网兜底入口。无线参数与主机连接参数集中在 [src/net_config.h](src/net_config.h) 一处修改。
 
@@ -50,11 +59,13 @@ F8266-1/
 │   ├── wifi_net.h      # WifiNet 模块对外接口（begin / handle / isConnected）
 │   ├── wifi_net.cpp    # WifiNet 实现：封装 WiFiManager，细节全部收敛在模块内
 │   ├── host_link.h     # HostLink 模块对外接口（begin / handle / isOnline / send / onCommand）
-│   └── host_link.cpp   # HostLink 实现：TCP 连主机、UDP 广播发现主机、上线帧、@…/ 帧收发与断线重连（pimpl）
+│   ├── host_link.cpp   # HostLink 实现：TCP 连主机、UDP 广播发现主机、上线帧、@…/ 帧收发与断线重连（pimpl）
+│   ├── oled_ctrl.h     # OledCtrl 模块对外接口（begin / isOk / handle）
+│   └── oled_ctrl.cpp   # OledCtrl 实现：SSD1306 I2C 初始化与显示渲染（激活首屏，pimpl）
 ├── include/            # 项目头文件（PlatformIO 标准目录，当前为空）
 ├── lib/                # 项目私有库（PlatformIO 标准目录，当前为空）
 ├── test/               # 单元测试（PlatformIO 标准目录，当前为空）
-├── platformio.ini      # PlatformIO 配置（依赖 tzapu/WiFiManager@^2.0.17）
+├── platformio.ini      # PlatformIO 配置（依赖 tzapu/WiFiManager + Adafruit SSD1306/GFX）
 └── README.md           # 本文档（仓库根另有 README 索引各板卡项目）
 ```
 
@@ -94,6 +105,7 @@ VSCode 中直接打开 `F8266-1` 文件夹即可用 PlatformIO IDE 的构建/烧
 
 | 日期 | 变更内容 |
 | --- | --- |
+| 2026-09-05 | 业务层起步：新增 `oled_ctrl` 模块，激活 0.96" SSD1306 OLED（I2C GPIO4/5，地址 0x3C），开机点亮显示设备名 / SmartFarm / OLED OK，作为智慧农场状态可视化层入口；依赖新增 Adafruit SSD1306/GFX，编译通过 |
 | 2026-09-05 | 主机 IP 支持 **UDP 广播动态发现**：`host_link` 监听主机宣告（端口 45555）自动采用发现地址，超时回退硬编码 IP；`net_config.h` 增发现参数，README 同步，编译通过 |
 | 2026-09-05 | 构建板型由 ESP-01 换为 **Adafruit HUZZAH ESP8266**（`board=huzzah`，4MB Flash），说明文档同步 |
 | 2026-09-05 | 接入主机通信层：新增 `host_link` 模块，联网后作为 TCP 客户端连主机 `192.168.1.100:8000`，连上上报 `@F8266-1 online/`，`@…/` 帧收发 + 断线自动重连；命令内容留 `onHostCommand()` 扩展口；主机连接参数进 `net_config.h`，编译通过 |
