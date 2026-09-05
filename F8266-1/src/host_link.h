@@ -3,8 +3,10 @@
 // HostLink：F8266-1 从机 → esp32-1 主机（NET_HOST_IP:NET_HOST_PORT）的 TCP 通信模块。
 // 职责：WiFi 在线时维持与主机的 TCP 连接，连上即上报上线帧；接收主机命令帧并分发
 //       到业务回调；对外提供 send() 发送接口。只做链路，不掺业务逻辑。
-// 说明：连接对象、收发缓冲等实现细节全部收敛在 .cpp（pimpl），本头文件只暴露接口，
+// 说明：① 连接对象、收发缓冲等实现细节全部收敛在 .cpp（pimpl），本头文件只暴露接口，
 //       不依赖 Arduino / 第三方库（String 仅前置声明，签名中只使用引用）。
+//       ② 主机 IP 支持 UDP 广播动态发现：监听到主机宣告（同网段）即自动采用发现地址，
+//       超时无宣告则回退 net_config.h 的 NET_HOST_IP（详见 host_link.cpp 的 pollDiscover）。
 
 class String;  // 前置声明：仅用于接口签名（const String&），头文件不包含 Arduino.h
 
@@ -35,6 +37,7 @@ class HostLink {
  private:
   bool writeFrame(const String &payload);  // 写一帧 @payload/ 到当前连接
   void tryConnect();                       // 发起一次连接；成功即上报上线
+  void pollDiscover();                     // 监听主机 UDP 广播,动态更新主机 IP
   void pollRx();                           // 读字节流并按 @…/ 切出完整命令帧
   void dispatchCommand();                  // 把收齐的一帧内容交给业务回调
 

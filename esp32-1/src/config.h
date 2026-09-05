@@ -40,6 +40,11 @@
 // ---------- 板载 RGB 灯(NeoPixel/WS2812,GPIO48) ----------
 #define RGB_LED_PIN  48   // 板载 NeoPixel 数据线,当前仅拉低保持熄灭
 
+// ---------- 主机 UDP 广播宣告(供从机 F8266-x 动态发现主机 IP) ----------
+#define HOST_ANNOUNCE_PORT        45555    // UDP 端口(主机与从机须一致)
+#define HOST_ANNOUNCE_INTERVAL_MS 3000UL   // 广播间隔(ms)
+#define HOST_ANNOUNCE_PREFIX      "ESP32HOST"  // 载荷前缀: ESP32HOST,<ip>,<base>,<count>
+
 // ---------- AP 兜底模式(路由器不可用时手机直连设备) ----------
 #define FALLBACK_AP_SSID  "ESP32-Direct"
 #define FALLBACK_AP_PASS  "88888888"

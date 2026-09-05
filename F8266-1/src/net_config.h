@@ -20,9 +20,17 @@
 // 本从机(F8266-1)作为 TCP 客户端连主机 NET_HOST_IP:NET_HOST_PORT，连上即上报上线。
 // ★ 主机与从机须处于同一网段（默认网络所在 LAN），改主机 IP / 端口只改此处。
 // 说明：TCP 连接为同步式，主机离线时 SDK 内部会在数秒内超时返回，由下方重试间隔限频。
-#define NET_HOST_IP      "192.168.1.100"  // 主机固定 IP（暂硬编码，后续可改动态发现）
+#define NET_HOST_IP      "192.168.1.100"  // 主机回退 IP（动态发现失败时用；发现成功自动覆盖）
 #define NET_HOST_PORT     8000             // 本从机(F8266-1)对应主机的监听端口
 #define NET_LINK_RETRY_MS 3000UL           // 连接失败 / 断线后的重试间隔（毫秒）
+
+// ===================== 主机动态发现（esp32-1 UDP 广播）=====================
+// 主机可能是 DHCP 动态 IP，会周期向局域网 UDP 广播宣告（@ESP32HOST,<ip>,<base>,<count>）。
+// 从机监听 NET_HOST_ANNOUNCE_PORT 即可动态获知主机 IP，无需写死；收到有效宣告自动切到
+// 发现地址；若超过 NET_HOST_DISCOVER_STALE_MS 再无宣告（主机离线/换网）则回退 NET_HOST_IP。
+#define NET_HOST_ANNOUNCE_PORT       45555    // 与主机 HOST_ANNOUNCE_PORT 一致
+#define NET_HOST_ANNOUNCE_PREFIX     "ESP32HOST"
+#define NET_HOST_DISCOVER_STALE_MS   20000UL  // 超过此时长未收到宣告则回退硬编码 IP
 
 // 单条命令帧【内容】的最大长度（字符数，不含 @ 与 /）。超过上限的帧整帧丢弃，
 // 防止畸形/超长数据拖垮 RAM 受限的 ESP8266（仅 80KB RAM）；确需更大请调此处后重编译。

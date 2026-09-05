@@ -1,20 +1,25 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <WiFiUdp.h>   // ESP8266 的 UDP 类 WiFiUDP（ESP8266WiFi.h 不自动包含它）
 
 #include "net_config.h"
 #include "host_link.h"
 
 // ===================== 实现体 =====================
-// 连接对象与收发缓冲集中在此，对外仅暴露 HostLink 接口。
+// 连接对象、UDP 发现与收发缓冲集中在此，对外仅暴露 HostLink 接口。
 struct HostLink::Impl {
   WiFiClient    client;              // 到主机的 TCP 连接
-  IPAddress     host;                // 主机 IP（begin 时由 NET_HOST_IP 解析）
+  IPAddress     host;                // 当前目标主机 IP（动态发现或回退地址）
+  IPAddress     fallbackHost;        // 回退主机 IP（由 NET_HOST_IP 解析）
+  bool          hostReady = false;   // 回退主机 IP 是否解析成功（配置错则不动作）
   CommandCb     cb = nullptr;        // 业务命令回调（命令扩展口）
+  WiFiUDP       udp;                 // UDP 监听：接收主机广播宣告
+  bool          sawAnnounce = false; // 是否收到过有效主机宣告
+  unsigned long lastSeenMs = 0;      // 上次收到有效宣告时刻（超时回退用）
   char          rx[NET_FRAME_MAX_LEN + 1];  // 帧内容接收缓冲（防御 '\0' 结尾多留 1）
   size_t        rxLen = 0;           // 当前帧已接收字节数
   bool          inFrame = false;     // 正在接收帧内容（已见 @ 未到 /）
   bool          wasOnline = false;   // 上一轮链路是否在线（用于状态切换打印）
-  bool          hostReady = false;   // 主机 IP 是否解析成功（配置错则不动作）
   unsigned long lastTryMs = 0;       // 上次尝试连接时刻（限频用）
 };
 
@@ -42,16 +47,22 @@ HostLink::~HostLink() {
 }
 
 void HostLink::begin() {
-  _p->hostReady = _p->host.fromString(NET_HOST_IP);
+  _p->hostReady = _p->fallbackHost.fromString(NET_HOST_IP);
+  _p->host = _p->fallbackHost;            // 默认先连回退地址,收到宣告后自动切换
   _p->client.stop();
   _p->cb = nullptr;
+  _p->sawAnnounce = false;
+  _p->lastSeenMs = 0;
   _p->rxLen = 0;
   _p->inFrame = false;
   _p->wasOnline = false;
   // 首次尝试立即触发（减一个重试间隔，使 handle 首轮即尝试连接）
   _p->lastTryMs = millis() - NET_LINK_RETRY_MS;
 
-  if (!_p->hostReady) {
+  // 开始监听主机 UDP 广播宣告（动态发现;仅当有回退地址时才监听）
+  if (_p->hostReady) {
+    _p->udp.begin(NET_HOST_ANNOUNCE_PORT);
+  } else {
     Serial.print(F("[link] NET_HOST_IP 无效: "));
     Serial.println(NET_HOST_IP);
   }
@@ -84,6 +95,26 @@ void HostLink::handle() {
     _p->inFrame = false;
     _p->rxLen = 0;
     return;
+  }
+
+  // 1.5) 监听主机广播宣告,动态更新目标主机 IP
+  pollDiscover();
+
+  // 动态发现超时:主机离线/换网,回退到硬编码地址重新寻找
+  unsigned long now2 = millis();
+  if (_p->sawAnnounce && now2 - _p->lastSeenMs > NET_HOST_DISCOVER_STALE_MS) {
+    _p->sawAnnounce = false;
+    if (_p->host != _p->fallbackHost) {
+      Serial.print(F("[link] 主机宣告超时，回退地址: "));
+      Serial.println(_p->fallbackHost);
+      _p->host = _p->fallbackHost;
+      if (_p->client.connected()) {      // 断开旧目标以触发重连
+        _p->client.stop();
+        _p->wasOnline = false;
+        _p->inFrame = false;
+        _p->rxLen = 0;
+      }
+    }
   }
 
   // 2) 链路断开：打印一次掉线后限频重连
@@ -135,6 +166,43 @@ void HostLink::tryConnect() {
   Serial.print(NET_DEVICE_NAME);
   Serial.println(F(" online/"));
   writeFrame(String(NET_DEVICE_NAME) + " online");
+}
+
+void HostLink::pollDiscover() {
+  // 主机周期广播形如: ESP32HOST,<ip>[,<base>,<count>] ；从机只取 <ip> 作为目标主机
+  int pkt = _p->udp.parsePacket();
+  if (pkt <= 0) return;
+
+  char buf[96];
+  int n = _p->udp.read(buf, sizeof(buf) - 1);
+  if (n <= 0) return;
+  buf[n] = '\0';
+
+  const char *prefix = NET_HOST_ANNOUNCE_PREFIX;
+  size_t plen = strlen(prefix);
+  if (strncmp(buf, prefix, plen) != 0 || buf[plen] != ',') return;
+
+  char *ipstr = buf + plen + 1;
+  char *comma = strchr(ipstr, ',');
+  if (comma) *comma = '\0';              // 截断到第一个逗号（忽略 base/count）
+
+  IPAddress parsed;
+  if (!parsed.fromString(ipstr)) return;
+
+  _p->sawAnnounce = true;
+  _p->lastSeenMs = millis();
+
+  if (parsed != _p->host) {              // 主机地址变化：切换目标并断旧连以触发重连
+    Serial.print(F("[link] 广播发现主机: "));
+    Serial.println(parsed);
+    _p->host = parsed;
+    if (_p->client.connected()) {
+      _p->client.stop();
+      _p->wasOnline = false;
+      _p->inFrame = false;
+      _p->rxLen = 0;
+    }
+  }
 }
 
 void HostLink::pollRx() {

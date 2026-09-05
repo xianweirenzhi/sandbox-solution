@@ -16,6 +16,7 @@ ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动�
 - [x] 从机上线协议：收到 `@F8266-x online/` 后对应端口窗口标记「F8266-x 已上线」，断开自动标记离线
 - [x] 网页：上方精简设备状态卡（原状态页全部内容收录）+ 下方 **2×3 六端口收发窗口**（222 布局），每卡含实时报文日志、发送输入框、收发统计
 - [x] `/api/status`、`/api/ports`（端口状态）JSON 接口，`/api/send`（向端口发报文）
+- [x] 主机 UDP 广播宣告：STA 在线时周期向局域网广播自身 IP/端口，**从机 F8266-x 可动态发现主机**（主机 DHCP 动态 IP 也能被找到）
 - [x] mDNS：支持 `http://esp32s3.local` 访问（部分设备/浏览器支持）
 - [x] 串口 5 秒心跳回报（AP 模式下含已连接客户端数量）
 
@@ -38,10 +39,11 @@ F_C_S3/
 ├── README.md             本文档
 └── src/
     ├── main.cpp          入口：流程编排 + 串口连接信息打印 + 心跳
-    ├── config.h          ★ 全部可调参数（WiFi、IP 获取方式、超时、AP 网段、端口）
+    ├── config.h          ★ 全部可调参数（WiFi、IP 获取方式、超时、AP 网段、端口、广播宣告）
     ├── wifi_service.h/.cpp   WiFi 管理：STA 优先(DHCP/固定 IP) → 超时切 AP
     ├── device_status.h/.cpp 状态采集：collectStatus() 返回 DeviceStatus 结构体
-    ├── port_service.h/.cpp  从机通信：6 个 TCP 端口收发、上线报文识别、日志环形缓冲
+    ├── port_service.h/.cpp  从机通信：6 个 TCP 端口收发、上线报文识别、TCP keepalive 掉电探测、日志环形缓冲
+    ├── host_announce.h/.cpp 主机 UDP 广播宣告：周期广播自身 IP/端口，供从机动态发现
     └── web_ui.h/.cpp     网页服务：页面 HTML、路由注册、各 JSON 接口
 ```
 
@@ -96,6 +98,9 @@ pio device monitor     # 串口监视
 | `WEB_PORT` | `80` | HTTP 服务端口 |
 | `MDNS_HOST` | `"esp32s3"` | mDNS 主机名（`esp32s3.local`） |
 | `SERIAL_BAUD` | `115200` | 串口波特率 |
+| `HOST_ANNOUNCE_PORT` | `45555` | 主机 UDP 广播端口（从机 `NET_HOST_ANNOUNCE_PORT` 须一致） |
+| `HOST_ANNOUNCE_INTERVAL_MS` | `3000` | 广播间隔（ms） |
+| `HOST_ANNOUNCE_PREFIX` | `"ESP32HOST"` | 宣告载荷前缀，格式 `ESP32HOST,<ip>,<base>,<count>` |
 
 > 若路由器网段也是 `192.168.4.x`，请把 `FALLBACK_AP_IP/MASK` 改为其他网段（如 `192.168.5.1`）避免冲突。
 
@@ -178,6 +183,7 @@ IP 地址  : 192.168.4.23
 - **上线**：从机连接后发送帧 `@F8266-x online/`（x 为从机编号），主机网页对应端口卡标记「**F8266-x 已上线**」（绿点），日志区出现 ★ 记录
 - **离线**：从机断开 TCP 连接后，端口卡自动标记离线（○ 记录）
 - **异常掉电**：从机突然断电不会发 FIN，主机端通过 **TCP keepalive** 探测（空闲 3s 后每 2s 一次，3 次无响应中止连接），约 **5-10s** 内感知并标记离线——无需从机固件配合
+- **主机动态发现**：主机 DHCP 动态 IP 时，主机每 3s 向局域网 UDP `45555` 广播 `ESP32HOST,<ip>,<base>,<count>`；从机监听同端口即可获知主机 IP（20s 无宣告则回退从机侧硬编码地址）
 - **健壮性**：若帧缺少帧尾 `/`，静默超过 `PORT_RX_TIMEOUT_MS`（默认 200ms）后按不完整帧强制结束处理
 - **测试**：可用网络调试助手（TCP Client 模式）连接主机 IP:8000，发送 `@F8266-1 online/` 验证
 
