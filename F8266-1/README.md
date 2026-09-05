@@ -54,7 +54,7 @@
 ```text
 F8266-1/
 ├── src/
-│   ├── main.cpp        # 入口：setup 联网并初始化主机链路，loop 调 net/link 的 handle + 命令回调
+│   ├── main.cpp        # 入口：setup 激活 OLED + 联网 + 初始化主机链路，loop 调 net/link/oled 的 handle + 命令回调
 │   ├── net_config.h    # 网络与主机参数集中处（SSID/密码/名称/超时/主机 IP/端口，改配置只动此文件）
 │   ├── wifi_net.h      # WifiNet 模块对外接口（begin / handle / isConnected）
 │   ├── wifi_net.cpp    # WifiNet 实现：封装 WiFiManager，细节全部收敛在模块内
@@ -79,7 +79,7 @@ pio device monitor              # 打开串口监视器（115200）
 
 VSCode 中直接打开 `F8266-1` 文件夹即可用 PlatformIO IDE 的构建/烧录按钮。
 
-**预期现象**：烧录上电后，若环境存在 `ESP-TEST` 网络，串口打印连上后的 IP；若不存在，设备变为配置热点 `F8266-1`，手机连上后浏览器访问 <http://192.168.4.1> 可配置网络。连上默认网络后，只要主机 esp32-1 在线（DHCP 动态 IP 亦可，从机会收到其广播宣告自动切换目标地址；串口会打印「广播发现主机: <IP>」），串口即打印「上报上线」，主机网页 8000 端口卡变绿显示「F8266-1 已上线」（主机与从机须在同一局域网网段，且 `NET_HOST_ANNOUNCE_PORT` 与主机 `HOST_ANNOUNCE_PORT` 一致）。
+**预期现象**：烧录上电后，OLED 即点亮首屏（`F8266-1` / `SmartFarm` / `OLED OK`），串口打印 `[oled] SSD1306 已激活`——若屏不亮，检查接线并把 `oled_ctrl.cpp` 的 `OLED_I2C_ADDR` 在 0x3C/0x3D 间切换（OLED 失败不影响后续联网）。随后若环境存在 `ESP-TEST` 网络，串口打印连上后的 IP；若不存在，设备变为配置热点 `F8266-1`，手机连上后浏览器访问 <http://192.168.4.1> 可配置网络。连上默认网络后，只要主机 esp32-1 在线（DHCP 动态 IP 亦可，从机会收到其广播宣告自动切换目标地址；串口会打印「广播发现主机: `<IP>`」），串口即打印「上报上线」，主机网页 8000 端口卡变绿显示「F8266-1 已上线」（主机与从机须在同一局域网网段，且 `NET_HOST_ANNOUNCE_PORT` 与主机 `HOST_ANNOUNCE_PORT` 一致）。
 
 ## 模块扩展指引
 
