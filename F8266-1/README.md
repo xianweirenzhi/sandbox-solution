@@ -1,10 +1,10 @@
-# F8266-1：ESP8266（ESP-01）WiFi 联网模块项目
+# F8266-1：ESP8266（Adafruit HUZZAH）WiFi 联网模块项目
 
 > 本文档由 Claude Code 维护，随项目变更同步更新。最后更新：2026-09-05
 
 ## 项目概述
 
-基于 PlatformIO + Arduino 的 ESP8266（ESP-01，1MB Flash）测试项目。当前固件以 **WiFiManager 驱动 STA 模式**联网：
+基于 PlatformIO + Arduino 的 ESP8266（Adafruit HUZZAH ESP8266，4MB Flash）测试项目。当前固件以 **WiFiManager 驱动 STA 模式**联网：
 
 - 开机直连硬编码默认网络 `ESP-TEST` / `88888888`；
 - 默认网络不可达时，自动打开**同名配置热点** `F8266-1`（192.168.4.1），供手机/电脑改配无线参数；
@@ -19,10 +19,11 @@
 
 | 项 | 值 |
 | --- | --- |
-| 开发板 | ESP-01（ESP8266EX，1MB Flash） |
+| 开发板 | Adafruit HUZZAH ESP8266（ESP8266EX，4MB Flash） |
+| 板型（board） | `huzzah` |
 | 平台 | espressif8266（PlatformIO） |
 | 框架 | Arduino |
-| 环境名 | `esp01_1m` |
+| 环境名（env） | `esp01_1m`（沿用早期命名，仅作构建标签） |
 | 串口波特率 | 115200 |
 
 ## 当前功能
@@ -91,5 +92,6 @@ VSCode 中直接打开 `F8266-1` 文件夹即可用 PlatformIO IDE 的构建/烧
 
 | 日期 | 变更内容 |
 | --- | --- |
+| 2026-09-05 | 构建板型由 ESP-01 换为 **Adafruit HUZZAH ESP8266**（`board=huzzah`，4MB Flash），说明文档同步 |
 | 2026-09-05 | 接入主机通信层：新增 `host_link` 模块，联网后作为 TCP 客户端连主机 `192.168.1.100:8000`，连上上报 `@F8266-1 online/`，`@…/` 帧收发 + 断线自动重连；命令内容留 `onHostCommand()` 扩展口；主机连接参数进 `net_config.h`，编译通过 |
 | 2026-09-04 | 创建项目：WiFiManager STA 联网模块化实现（`net_config.h` + `wifi_net` 模块 + 精简 `main.cpp`），直连 `ESP-TEST/88888888`，同名配置热点 `F8266-1` 兜底 + 断线自愈；加入仓库 sandbox-solution 顶层目录，编译通过 |
