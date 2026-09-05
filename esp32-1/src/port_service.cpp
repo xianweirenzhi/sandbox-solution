@@ -84,6 +84,19 @@ static void flushRxIfTimeout(PortCtx &p) {
   }
 }
 
+// 调优 TCP keepalive 定时,使从机异常掉电在短时间内被判离线(需平台 LWIP_TCP_KEEPALIVE=1)
+static void enableKeepalive(int fd) {
+  if (fd < 0) return;
+  int on = 1;
+  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on));
+  int val = PORT_KEEPALIVE_IDLE_S;
+  setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val));
+  val = PORT_KEEPALIVE_INTVL_S;
+  setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val));
+  val = PORT_KEEPALIVE_CNT;
+  setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val));
+}
+
 // 接入新从机
 static void acceptClients(PortCtx &p) {
   while (WiFiClient c = p.server->available()) {
@@ -96,6 +109,7 @@ static void acceptClients(PortCtx &p) {
       }
     }
     if (placed) {
+      enableKeepalive(c.fd());  // 掉电探测(半开连接约 IDLE+INTVL*CNT 秒后中止)
       pushLog(p, timeStamp() + " ● 从机接入 " + c.remoteIP().toString());
       Serial.printf("[Port %u] 接入 fd=%d ip=%s\n", p.port, c.fd(),
                     c.remoteIP().toString().c_str());

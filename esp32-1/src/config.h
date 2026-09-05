@@ -29,6 +29,14 @@
 #define PORT_LOG_LINES   8      // 每端口在网页上保留的收发记录条数
 #define PORT_RX_TIMEOUT_MS 200  // 不完整帧(缺帧尾'/')的静默超时兜底(ms)
 
+// ---------- TCP keepalive(感知从机异常掉电,仅主机端即可生效) ----------
+// 从机掉电不发送 FIN,连接停留在半开状态;由 lwIP keepalive 在空闲
+// IDLE 秒后按 INTVL 秒探测,连续 CNT 次无响应则中止连接 -> recv 报错 -> 判离线。
+// 判定用时约 IDLE + INTVL*CNT(默认 3+2*3 ≈ 最快 9s)。
+#define PORT_KEEPALIVE_IDLE_S   3   // 空闲多久开始探测(秒)
+#define PORT_KEEPALIVE_INTVL_S  2   // 探测间隔(秒)
+#define PORT_KEEPALIVE_CNT      3   // 无响应探测次数
+
 // ---------- 板载 RGB 灯(NeoPixel/WS2812,GPIO48) ----------
 #define RGB_LED_PIN  48   // 板载 NeoPixel 数据线,当前仅拉低保持熄灭
 
