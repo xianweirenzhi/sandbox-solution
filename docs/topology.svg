@@ -1,0 +1,202 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 930" width="1160" height="930" role="img" aria-label="sandbox-solution 预期完整拓扑：用户浏览器经 HTTP 访问 esp32-1 主机控制台；主机经 UDP 45555 广播宣告供从机动态发现；F8266-x 从机作为 TCP 客户端连入主机 8000~8005 端口；esp8266-1 为独立演示节点">
+  <title>sandbox-solution 预期完整拓扑</title>
+  <desc>主从式沙盘控制系统拓扑：① 用户层（浏览器）→ ② 主机 esp32-1（控制面 HTTP :80 / 发现面 UDP :45555 / 数据面 TCP :8000~8005）→ ③ 从机层 F8266-1~6（一从机一端口，仅 F8266-1 已实现）；④ esp8266-1 独立岛不入主从架构。</desc>
+  <style>
+    svg {
+      --surface: #fcfcfb;
+      --node: #f9f9f7;
+      --ink-1: #0b0b0b;
+      --ink-2: #52514e;
+      --ink-3: #898781;
+      --border: rgba(11, 11, 11, 0.10);
+      --lane: #c3c2b7;
+      --plane-http: #2a78d6;
+      --plane-udp: #eb6834;
+      --plane-tcp: #1baf7a;
+      --status-good: #0ca30c;
+    }
+    @media (prefers-color-scheme: dark) {
+      svg {
+        --surface: #1a1a19;
+        --node: #0d0d0d;
+        --ink-1: #ffffff;
+        --ink-2: #c3c2b7;
+        --ink-3: #898781;
+        --border: rgba(255, 255, 255, 0.10);
+        --lane: #383835;
+        --plane-http: #3987e5;
+        --plane-udp: #d95926;
+        --plane-tcp: #199e70;
+      }
+    }
+    text { font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif; fill: var(--ink-2); }
+    .bg { fill: var(--surface); }
+    .node { fill: var(--node); stroke: var(--border); stroke-width: 1; }
+    .plan { stroke-dasharray: 5 4; }
+    .t-title { font-size: 20px; font-weight: 700; fill: var(--ink-1); }
+    .t-sub { font-size: 12.5px; fill: var(--ink-3); }
+    .t-box { font-size: 13.5px; font-weight: 700; fill: var(--ink-1); }
+    .t-body { font-size: 11.5px; }
+    .t-small { font-size: 10.5px; fill: var(--ink-3); }
+    .t-chip { font-size: 11px; fill: var(--ink-2); }
+    .lane-box { fill: none; stroke: var(--lane); stroke-width: 1; stroke-dasharray: 6 5; }
+    .ln { fill: none; stroke-width: 2; stroke-linecap: round; }
+    .l-http { stroke: var(--plane-http); }
+    .l-udp { stroke: var(--plane-udp); stroke-dasharray: 7 5; }
+    .l-tcp { stroke: var(--plane-tcp); }
+    .m-http { fill: var(--plane-http); }
+    .m-udp { fill: var(--plane-udp); }
+    .m-tcp { fill: var(--plane-tcp); }
+    .junction { fill: var(--plane-udp); }
+    .dot-good { fill: var(--status-good); }
+    .halo { paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+    .key { stroke-width: 2.5; stroke-linecap: round; fill: none; }
+  </style>
+  <defs>
+    <marker id="ah-http" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="m-http" d="M0,0 L10,5 L0,10 z" />
+    </marker>
+    <marker id="ah-udp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="m-udp" d="M0,0 L10,5 L0,10 z" />
+    </marker>
+    <marker id="ah-tcp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="m-tcp" d="M0,0 L10,5 L0,10 z" />
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1160" height="930" />
+
+  <!-- 标题 -->
+  <text class="t-title" x="580" y="34" text-anchor="middle">sandbox-solution 预期完整拓扑</text>
+  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 1 主机 + 6 从机位 + 浏览器控制台 · 进度基线 2026-09-06</text>
+
+  <!-- ① 用户层 -->
+  <rect class="node" x="380" y="82" width="400" height="52" rx="10" />
+  <text class="t-box" x="580" y="104" text-anchor="middle">① 用户（手机 / PC 浏览器）</text>
+  <text class="t-small" x="580" y="122" text-anchor="middle">监控全网状态 · 向任意从机下发命令</text>
+
+  <!-- 控制面：用户 → 主机 -->
+  <path class="ln l-http" d="M580,134 L580,224" marker-end="url(#ah-http)" />
+  <text class="t-body" x="594" y="168">控制面 HTTP :80</text>
+  <text class="t-small" x="594" y="184">接口 /api/status · /api/ports · /api/send · mDNS esp32s3.local</text>
+
+  <!-- 局域网边界 -->
+  <rect class="lane-box" x="70" y="196" width="1020" height="540" rx="14" />
+  <text class="t-small" x="90" y="216">局域网 · 路由器 ESP-TEST — 主机 DHCP / 固定 IP 均可，从机经 UDP 宣告自动跟随</text>
+
+  <!-- ② 主机 -->
+  <rect class="node" x="250" y="228" width="660" height="170" rx="10" />
+  <text class="t-box" x="270" y="252">② 主机 esp32-1 · 4D Systems gen4-ESP32S3 (R8N16)</text>
+  <circle class="dot-good" cx="844" cy="248" r="5" />
+  <text class="t-chip" x="856" y="252">已实现</text>
+  <text class="t-body" x="270" y="278">网页控制台 :80（精简状态卡 + 2×3 端口收发窗）· keepalive ≈5~10s 判从机异常掉电</text>
+  <text class="t-body" x="270" y="300">兜底：STA 120s 连不上路由器 → 热点 ESP32-Direct（192.168.4.1，终态，重启回 STA）</text>
+  <text class="t-body" x="270" y="322">发现面：UDP :45555 每 3s 广播 ESP32HOST,ip,8000,6（仅 STA 在线时）</text>
+  <text class="t-body" x="270" y="344">数据面：TCP :8000~:8005 六路从机端口 · @内容/ 帧 ≤64 字符 · 每口 ≤3 连接</text>
+  <text class="t-body" x="270" y="366">从机掉电不发 FIN，主机端 lwIP keepalive（空闲 3s + 2s×3 次探测）判离线</text>
+
+  <!-- 端口标签（与下方从机列中心对齐） -->
+  <g>
+    <rect class="node" x="130" y="404" width="80" height="24" rx="5" /><text class="t-small" x="170" y="420" text-anchor="middle">:8000</text>
+    <rect class="node" x="294" y="404" width="80" height="24" rx="5" /><text class="t-small" x="334" y="420" text-anchor="middle">:8001</text>
+    <rect class="node" x="458" y="404" width="80" height="24" rx="5" /><text class="t-small" x="498" y="420" text-anchor="middle">:8002</text>
+    <rect class="node" x="622" y="404" width="80" height="24" rx="5" /><text class="t-small" x="662" y="420" text-anchor="middle">:8003</text>
+    <rect class="node" x="786" y="404" width="80" height="24" rx="5" /><text class="t-small" x="826" y="420" text-anchor="middle">:8004</text>
+    <rect class="node" x="950" y="404" width="80" height="24" rx="5" /><text class="t-small" x="990" y="420" text-anchor="middle">:8005</text>
+  </g>
+
+  <!-- 数据面：从机 → 端口（TCP 客户端方向，箭头对准端口芯片中心） -->
+  <path class="ln l-tcp" d="M170,536 L170,436" marker-end="url(#ah-tcp)" />
+  <path class="ln l-tcp" d="M334,536 L334,436" marker-end="url(#ah-tcp)" />
+  <path class="ln l-tcp" d="M498,536 L498,436" marker-end="url(#ah-tcp)" />
+  <path class="ln l-tcp" d="M662,536 L662,436" marker-end="url(#ah-tcp)" />
+  <path class="ln l-tcp" d="M826,536 L826,436" marker-end="url(#ah-tcp)" />
+  <path class="ln l-tcp" d="M990,536 L990,436" marker-end="url(#ah-tcp)" />
+
+  <!-- 发现面：主机 → 广播总线 → 各从机 -->
+  <path class="ln l-udp" d="M580,398 L580,504" />
+  <path class="ln l-udp" d="M110,504 L1006,504" />
+  <circle class="junction" cx="580" cy="504" r="4" />
+  <path class="ln l-udp" d="M126,504 L126,532" marker-end="url(#ah-udp)" />
+  <path class="ln l-udp" d="M290,504 L290,532" marker-end="url(#ah-udp)" />
+  <path class="ln l-udp" d="M454,504 L454,532" marker-end="url(#ah-udp)" />
+  <path class="ln l-udp" d="M618,504 L618,532" marker-end="url(#ah-udp)" />
+  <path class="ln l-udp" d="M782,504 L782,532" marker-end="url(#ah-udp)" />
+  <path class="ln l-udp" d="M946,504 L946,532" marker-end="url(#ah-udp)" />
+  <text class="t-body halo" x="580" y="462" text-anchor="middle">数据面 · TCP 从机主动连入 · 上线帧 @F8266-x online/ · @…/ 帧收发</text>
+  <text class="t-body halo" x="580" y="492" text-anchor="middle">发现面 · UDP :45555 广播宣告 → 从机动态发现主机 · 20s 无宣告回退 192.168.1.100</text>
+
+  <!-- ③ 从机层 -->
+  <g>
+    <rect class="node" x="100" y="536" width="140" height="140" rx="10" />
+    <text class="t-box" x="170" y="560" text-anchor="middle">F8266-1</text>
+    <circle class="dot-good" cx="148" cy="576" r="4" />
+    <text class="t-chip" x="159" y="580">已实现</text>
+    <text class="t-small" x="170" y="600" text-anchor="middle">智慧农场状态节点</text>
+    <text class="t-small" x="170" y="616" text-anchor="middle">OLED：SSD1306</text>
+    <text class="t-small" x="170" y="632" text-anchor="middle">I2C GPIO4/5 @0x3C</text>
+    <text class="t-small" x="170" y="648" text-anchor="middle">状态可视化起步</text>
+  </g>
+  <g>
+    <rect class="node plan" x="264" y="536" width="140" height="140" rx="10" />
+    <text class="t-box" x="334" y="560" text-anchor="middle">F8266-2</text>
+    <rect x="311" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
+    <text class="t-chip" x="326" y="580">规划</text>
+    <text class="t-small" x="334" y="600" text-anchor="middle">端口已预留</text>
+    <text class="t-small" x="334" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+  </g>
+  <g>
+    <rect class="node plan" x="428" y="536" width="140" height="140" rx="10" />
+    <text class="t-box" x="498" y="560" text-anchor="middle">F8266-3</text>
+    <rect x="475" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
+    <text class="t-chip" x="490" y="580">规划</text>
+    <text class="t-small" x="498" y="600" text-anchor="middle">端口已预留</text>
+    <text class="t-small" x="498" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+  </g>
+  <g>
+    <rect class="node plan" x="592" y="536" width="140" height="140" rx="10" />
+    <text class="t-box" x="662" y="560" text-anchor="middle">F8266-4</text>
+    <rect x="639" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
+    <text class="t-chip" x="654" y="580">规划</text>
+    <text class="t-small" x="662" y="600" text-anchor="middle">端口已预留</text>
+    <text class="t-small" x="662" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+  </g>
+  <g>
+    <rect class="node plan" x="756" y="536" width="140" height="140" rx="10" />
+    <text class="t-box" x="826" y="560" text-anchor="middle">F8266-5</text>
+    <rect x="803" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
+    <text class="t-chip" x="818" y="580">规划</text>
+    <text class="t-small" x="826" y="600" text-anchor="middle">端口已预留</text>
+    <text class="t-small" x="826" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+  </g>
+  <g>
+    <rect class="node plan" x="920" y="536" width="140" height="140" rx="10" />
+    <text class="t-box" x="990" y="560" text-anchor="middle">F8266-6</text>
+    <rect x="967" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
+    <text class="t-chip" x="982" y="580">规划</text>
+    <text class="t-small" x="990" y="600" text-anchor="middle">端口已预留</text>
+    <text class="t-small" x="990" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+  </g>
+  <text class="t-small" x="580" y="700" text-anchor="middle">③ 从机层 F8266-x ×6 · 一从机一端口 · 每台三层：wifi_net 联网（直连 + 配置热点兜底 + 断线自愈）→ host_link 通信（UDP 发现 + TCP + 断线重连）→ 业务层（onHostCommand 命令执行 / OLED 状态屏）</text>
+  <text class="t-small" x="580" y="718" text-anchor="middle">板卡：Adafruit HUZZAH ESP8266 · 配置热点同名 F8266-x（192.168.4.1，180s 无人配置自动重启重试）</text>
+
+  <!-- ④ 独立岛 -->
+  <rect class="node" x="250" y="764" width="660" height="64" rx="10" />
+  <text class="t-box" x="270" y="788">④ 独立岛 esp8266-1（HUZZAH ESP8266）· 不入主从架构</text>
+  <circle class="dot-good" cx="844" cy="784" r="5" />
+  <text class="t-chip" x="856" y="788">已实现</text>
+  <text class="t-small" x="270" y="810">SoftAP 热点 ESP8266-Intro（192.168.4.1）· DNS 通配劫持 → 强制门户弹 ESP8266 介绍页 · 定位待定（保留 / 改造 / 归档）</text>
+
+  <!-- 图例 -->
+  <text class="t-small" x="100" y="856">图例</text>
+  <path class="key l-http" d="M100,874 L128,874" marker-end="url(#ah-http)" />
+  <text class="t-chip" x="136" y="878">控制面 HTTP :80 · 用户 → 主机控制台</text>
+  <path class="key l-tcp" d="M420,874 L448,874" marker-end="url(#ah-tcp)" />
+  <text class="t-chip" x="456" y="878">数据面 TCP · 从机 → 主机端口 · @…/ 帧</text>
+  <path class="key l-udp" d="M740,874 L768,874" marker-end="url(#ah-udp)" />
+  <text class="t-chip" x="776" y="878">发现面 UDP :45555 · 主机 → 全网广播</text>
+  <circle class="dot-good" cx="103" cy="902" r="5" />
+  <text class="t-chip" x="114" y="906">已实现</text>
+  <rect class="node plan" x="196" y="894" width="14" height="14" rx="3" />
+  <text class="t-chip" x="218" y="906">规划（端口已预留）</text>
+</svg>

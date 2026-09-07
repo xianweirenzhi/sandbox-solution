@@ -36,3 +36,8 @@
 // 单条命令帧【内容】的最大长度（字符数，不含 @ 与 /）。超过上限的帧整帧丢弃，
 // 防止畸形/超长数据拖垮 RAM 受限的 ESP8266（仅 80KB RAM）；确需更大请调此处后重编译。
 #define NET_FRAME_MAX_LEN 64
+
+// ===================== 板载外设引脚（集中在此修改）=====================
+// I2C 总线：OLED（0x3C）与 SHT30 温湿度（0x44）共用一条，接板上 SDA/SCL 排针。
+#define PERIPH_I2C_SDA 4   // 板上 SDA（GPIO4）
+#define PERIPH_I2C_SCL 5   // 板上 SCL（GPIO5）
