@@ -61,9 +61,12 @@ static void startFallbackAP() {
 void begin() {
   if (connectSTA()) {
     s_mode = NetMode::STA;
-    return;
+  } else {
+    startFallbackAP();   // STA 超时 -> AP 兜底(重启设备才会重新尝试 STA)
   }
-  startFallbackAP();   // STA 超时 -> AP 兜底(重启设备才会重新尝试 STA)
+  // 关闭 WiFi modem 省电:默认 WIFI_PS_MIN_MODEM 会让 modem 空闲打盹,
+  // 收到 HTTP/TCP 请求时唤醒有延迟,表现为网页要多次刷新才能进。
+  WiFi.setSleep(false);   // 等价 WIFI_PS_NONE,牺牲少量功耗换网页实时响应
 }
 
 void loop() {
