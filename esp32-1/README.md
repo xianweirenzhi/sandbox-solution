@@ -17,6 +17,7 @@ ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动�
 - [x] 网页：设备状态卡 + **传感数据卡（6 指标进度条图形化）** + **执行器控制按键（水泵/风扇/舵机）** + 二级日志页（原 2×3 收发窗口收进，点击「通信日志」展开）
 - [x] `/api/status`、`/api/ports`（端口状态 + 最新传感数据）JSON 接口，`/api/send`（向端口发报文/执行器命令）
 - [x] 主机 UDP 广播宣告：STA 在线时周期向局域网广播自身 IP/端口，**从机 F8266-x 可动态发现主机**（主机 DHCP 动态 IP 也能被找到）
+- [x] **阈值自动控制**：4 条规则（高温→风扇 / 高CO₂→风扇 / 土壤干→水泵 / 低湿→水泵），滞回 + 连续 N 次确认防抖，越界自动下发执行器命令；网页可改阈值 + 自动/手动总开关，配置存 NVS 重启保留
 - [x] mDNS：支持 `http://esp32s3.local` 访问（部分设备/浏览器支持）
 - [x] 串口 5 秒心跳回报（AP 模式下含已连接客户端数量）
 
@@ -44,6 +45,7 @@ F_C_S3/
     ├── device_status.h/.cpp 状态采集：collectStatus() 返回 DeviceStatus 结构体
     ├── port_service.h/.cpp  从机通信：6 个 TCP 端口收发、上线报文识别、传感 JSON 解析存储、TCP keepalive 掉电探测、日志环形缓冲
     ├── host_announce.h/.cpp 主机 UDP 广播宣告：周期广播自身 IP/端口，供从机动态发现
+    ├── auto_ctrl.h/.cpp     阈值自动控制：4 规则滞回+防抖，越界自动下发执行器命令，配置存 NVS
     └── web_ui.h/.cpp     网页服务：页面 HTML（状态卡+数据卡+执行器+日志二级页）、路由注册、各 JSON 接口
 ```
 
@@ -101,6 +103,14 @@ pio device monitor     # 串口监视
 | `HOST_ANNOUNCE_PORT` | `45555` | 主机 UDP 广播端口（从机 `NET_HOST_ANNOUNCE_PORT` 须一致） |
 | `HOST_ANNOUNCE_INTERVAL_MS` | `3000` | 广播间隔（ms） |
 | `HOST_ANNOUNCE_PREFIX` | `"ESP32HOST"` | 宣告载荷前缀，格式 `ESP32HOST,<ip>,<base>,<count>` |
+| `AC_T_HIGH` | `30.0` | 高温触发阈值 ℃（网页可改，存 NVS 覆盖） |
+| `AC_T_HYST` | `2.0` | 温度滞回 ℃（固定，不暴露网页） |
+| `AC_CO2_HIGH` | `1200` | 高 CO₂ 触发阈值 ppm |
+| `AC_CO2_HYST` | `200` | CO₂ 滞回 ppm（固定） |
+| `AC_H_LOW` | `40.0` | 低湿触发阈值 % |
+| `AC_H_HYST` | `5.0` | 湿度滞回 %（固定） |
+| `AC_CONFIRM_N` | `3` | 连续越界/回安全区次数（约 6s 防抖） |
+| `AC_SAMPLE_MS` | `2000` | 自动判断周期（与从机上报周期对齐） |
 
 > 若路由器网段也是 `192.168.4.x`，请把 `FALLBACK_AP_IP/MASK` 改为其他网段（如 `192.168.5.1`）避免冲突。
 
@@ -162,6 +172,8 @@ IP 地址  : 192.168.4.23
 | `/api/status` | GET | 设备状态 JSON |
 | `/api/ports` | GET | 6 个从机通信端口状态 JSON（数组，含最新传感数据） |
 | `/api/send` | POST | 向指定端口发送报文/命令，参数 `port`（端口号）、`text`（命令内容，自动包装为 `@内容/` 帧；执行器命令见下方词表） |
+| `/api/auto` | GET | 返回自动控制配置（enabled/tHigh/co2High/hLow/fanActive/pumpActive）与 4 条规则触发状态 |
+| `/api/auto` | POST | 保存自动控制配置，参数 `enabled`、`tHigh`、`co2High`、`hLow`，写入 NVS |
 | 其他 | — | 返回 404 |
 
 **`/api/ports` 返回字段（数组，每端口一项）：**

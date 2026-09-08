@@ -17,6 +17,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "auto_ctrl.h"
 #include "config.h"
 #include "device_status.h"
 #include "host_announce.h"
@@ -75,6 +76,7 @@ void setup() {
   web_ui::begin();                     // 两种模式下网页服务均可用
   port_service::begin();               // 开启 6 个从机通信端口
   host_announce::begin();              // 初始化主机 UDP 广播
+  auto_ctrl::begin();                  // 载入阈值配置(NVS),启动自动控制
 }
 
 void loop() {
@@ -82,6 +84,7 @@ void loop() {
   web_ui::loop();
   port_service::loop();                // 处理从机接入/收发/断开
   host_announce::loop();               // 周期广播主机地址(供从机发现)
+  auto_ctrl::loop();                   // 阈值判断 + 自动下发执行器命令
 
   // 每 5 秒串口心跳,持续验证连接状态
   static uint32_t lastPrint = 0;

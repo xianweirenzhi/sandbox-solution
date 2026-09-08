@@ -4,6 +4,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
+#include "auto_ctrl.h"
 #include "config.h"
 #include "device_status.h"
 #include "port_service.h"
@@ -60,6 +61,13 @@ h2{font-size:14px;color:#666;margin:0 0 8px;font-weight:600}
 .actrow button.gray{background:#95a5a6}
 .actrow input[type=range]{flex:1;min-width:0}
 .servoval{width:40px;text-align:center;font-weight:700;font-size:14px}
+/* 自动控制卡 */
+.actrow input[type=number]{width:76px;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:13px}
+.actrow .unit{font-size:12px;color:#999}
+.rule{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:#666}
+.rule .rdot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0}
+.rule.on .rdot{background:#e74c3c}
+.rule.on{color:#c0392b;font-weight:600}
 /* 日志二级页(全屏覆盖) */
 .logpage{position:fixed;inset:0;background:#fff;z-index:10;overflow-y:auto;display:none;padding:12px}
 .logpage.show{display:block}
@@ -123,6 +131,16 @@ footer{text-align:center;color:#aaa;font-size:11px;margin:4px 0}
   <div class="actrow"><span class="lbl">水泵</span><button class="green" onclick="act('PUMP ON')">开</button><button class="gray" onclick="act('PUMP OFF')">关</button></div>
   <div class="actrow"><span class="lbl">风扇</span><button class="green" onclick="act('FAN FWD')">正转</button><button class="red" onclick="act('FAN REV')">反转</button><button class="gray" onclick="act('FAN STOP')">停</button></div>
   <div class="actrow"><span class="lbl">舵机</span><input type="range" id="servo" min="0" max="180" value="90" oninput="document.getElementById('servoVal').textContent=this.value" onchange="act('SERVO '+this.value)"><span class="servoval" id="servoVal">90</span>°</div>
+</div>
+
+<!-- 自动控制 -->
+<div class="card">
+  <div class="cardhead"><h2>自动控制</h2><button id="autoBtn" class="gray" onclick="toggleAuto()">手动</button></div>
+  <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇</span></div>
+  <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇</span></div>
+  <div class="actrow"><span class="lbl">低湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发水泵</span></div>
+  <div class="actrow"><button class="green" onclick="saveAuto()">保存阈值</button></div>
+  <div id="rules"></div>
 </div>
 
 <button id="logBtn" onclick="document.getElementById('logPage').classList.add('show')">📋 通信日志</button>
@@ -239,6 +257,43 @@ async function sendMsg(i){
 }
 refreshStatus();setInterval(refreshStatus,2000);
 refreshPorts();setInterval(refreshPorts,1500);
+
+/* ---------- 自动控制 ---------- */
+function renderRules(rules){
+  document.getElementById('rules').innerHTML=rules.map(r=>
+    '<div class="rule'+(r.active?' on':'')+'"><span class="rdot"></span>'+r.name+(r.active?' 已触发':' 未触发')+'</div>').join('');
+}
+async function loadAuto(){
+  try{
+    const d=await(await fetch('/api/auto')).json();
+    document.getElementById('ac_t').value=d.tHigh;
+    document.getElementById('ac_co2').value=d.co2High;
+    document.getElementById('ac_h').value=d.hLow;
+    const b=document.getElementById('autoBtn');
+    b.textContent=d.enabled?'自动':'手动';
+    b.className=d.enabled?'green':'gray';
+    renderRules(d.rules);
+  }catch(e){}
+}
+async function saveAuto(){
+  const t=document.getElementById('ac_t').value;
+  const c=document.getElementById('ac_co2').value;
+  const h=document.getElementById('ac_h').value;
+  const en=document.getElementById('autoBtn').textContent==='自动';
+  try{
+    const body=new URLSearchParams({enabled:String(en),tHigh:t,co2High:c,hLow:h});
+    const r=await(await fetch('/api/auto',{method:'POST',body:body})).json();
+    if(r.ok)loadAuto(); else alert('保存失败：'+(r.error||''));
+  }catch(e){alert('保存失败：网络错误')}
+}
+async function toggleAuto(){
+  const b=document.getElementById('autoBtn');
+  const nowAuto=b.textContent==='自动';
+  b.textContent=nowAuto?'手动':'自动';
+  b.className=nowAuto?'gray':'green';
+  await saveAuto();
+}
+loadAuto();setInterval(loadAuto,2000);
 </script>
 </body>
 </html>
@@ -349,6 +404,44 @@ static void handleSend() {
                   ",\"error\":\"" + (ok ? "" : "该端口无已连接从机") + "\"}");
 }
 
+// /api/auto GET:返回自动控制配置 + 各规则触发状态
+static void handleGetAuto() {
+  auto_ctrl::Config c = auto_ctrl::getConfig();
+  String j;
+  j.reserve(256);
+  j += "{\"enabled\":" + String(c.enabled ? "true" : "false");
+  j += ",\"tHigh\":" + String(c.tHigh);
+  j += ",\"co2High\":" + String(c.co2High);
+  j += ",\"hLow\":" + String(c.hLow);
+  j += ",\"fanActive\":" + String(auto_ctrl::fanActive() ? "true" : "false");
+  j += ",\"pumpActive\":" + String(auto_ctrl::pumpActive() ? "true" : "false");
+  j += ",\"rules\":[";
+  for (uint8_t i = 0; i < auto_ctrl::ruleCount(); i++) {
+    if (i) j += ",";
+    auto_ctrl::RuleState r = auto_ctrl::ruleState(i);
+    j += "{\"name\":\"" + jsonEsc(r.name) + "\"";
+    j += ",\"active\":" + String(r.active ? "true" : "false") + "}";
+  }
+  j += "]}";
+  server.send(200, "application/json", j);
+}
+
+// /api/auto POST:保存配置(enabled/tHigh/co2High/hLow)并写 NVS
+static void handleSetAuto() {
+  if (!server.hasArg("tHigh") || !server.hasArg("co2High") || !server.hasArg("hLow")) {
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"缺少阈值参数\"}");
+    return;
+  }
+  auto_ctrl::Config c;
+  c.enabled = server.arg("enabled") == "true";
+  c.tHigh   = server.arg("tHigh").toFloat();
+  c.co2High = server.arg("co2High").toFloat();
+  c.hLow    = server.arg("hLow").toFloat();
+  auto_ctrl::setConfig(c);
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
 /* ---------------- 模块接口 ---------------- */
 
 void begin() {
@@ -358,6 +451,8 @@ void begin() {
   server.on("/api/status", HTTP_GET, handleStatus);
   server.on("/api/ports", HTTP_GET, handlePorts);
   server.on("/api/send", HTTP_POST, handleSend);
+  server.on("/api/auto", HTTP_GET, handleGetAuto);
+  server.on("/api/auto", HTTP_POST, handleSetAuto);
   // 后续新增功能在此注册路由即可
   server.onNotFound([]() {
     server.send(404, "text/plain; charset=utf-8", "404: Not Found");
