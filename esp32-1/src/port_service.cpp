@@ -23,6 +23,8 @@ struct PortCtx {
   bool        hasData = false;
   float       t = NAN, h = NAN, lux = NAN, co2 = NAN, tvoc = NAN;
   int8_t      soil = -1;
+  // 从机上报的执行器实时状态
+  uint8_t     pump = 0, fan = 0, servo = 90;
 };
 
 static PortCtx s_ports[PORT_COUNT];
@@ -73,6 +75,10 @@ static void parseData(PortCtx &p, const String &cmd) {
   p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;
   p.co2  = doc["co2"].is<float>()  ? doc["co2"].as<float>()  : NAN;
   p.tvoc = doc["tvoc"].is<float>() ? doc["tvoc"].as<float>() : NAN;
+  // 执行器状态:缺失字段保留旧值(旧固件兼容)
+  if (doc["pump"].is<int>())  p.pump  = doc["pump"].as<int>();
+  if (doc["fan"].is<int>())   p.fan   = doc["fan"].as<int>();
+  if (doc["servo"].is<int>()) p.servo = doc["servo"].as<int>();
 }
 
 // 端口内无连接时,若曾上线则标记离线
@@ -235,6 +241,7 @@ PortSnapshot snapshot(uint8_t idx) {
   s.hasData = p.hasData;
   s.t = p.t; s.h = p.h; s.lux = p.lux; s.soil = p.soil;
   s.co2 = p.co2; s.tvoc = p.tvoc;
+  s.pump = p.pump; s.fan = p.fan; s.servo = p.servo;
   for (uint8_t i = 0; i < p.logLen; i++) {  // 环形缓冲按时间序导出
     uint8_t k = (p.logHead + PORT_LOG_LINES - p.logLen + i) % PORT_LOG_LINES;
     s.log[i] = p.log[k];

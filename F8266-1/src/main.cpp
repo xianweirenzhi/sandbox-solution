@@ -60,6 +60,13 @@ static void reportSensors() {
   j += sgp30.hasData() ? String((unsigned)sgp30.getEco2Ppm()) : F("null");
   j += F(",\"tvoc\":");
   j += sgp30.hasData() ? String((unsigned)sgp30.getTvocPpb()) : F("null");
+  // 执行器实时状态:主机据此在网页显示水泵/风扇/舵机当前态
+  j += F(",\"pump\":");
+  j += act.pumpIsOn() ? '1' : '0';          // 0=关 1=开
+  j += F(",\"fan\":");
+  j += String(act.fanState());              // 0=OFF 1=FWD 2=REV
+  j += F(",\"servo\":");
+  j += String(act.servoGet());              // 0~180 度
   j += '}';
 
   if (link.send(j)) {

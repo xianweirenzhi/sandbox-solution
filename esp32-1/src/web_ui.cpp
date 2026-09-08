@@ -61,6 +61,9 @@ h2{font-size:14px;color:#666;margin:0 0 8px;font-weight:600}
 .actrow button.gray{background:#95a5a6}
 .actrow input[type=range]{flex:1;min-width:0}
 .servoval{width:40px;text-align:center;font-weight:700;font-size:14px}
+.astat{margin-left:auto;font-size:12px;font-weight:700;color:#999}
+.astat.on{color:#27ae60}
+.astat.act{color:#e67e22}
 /* 自动控制卡 */
 .actrow input[type=number]{width:76px;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:13px}
 .actrow .unit{font-size:12px;color:#999}
@@ -128,8 +131,8 @@ footer{text-align:center;color:#aaa;font-size:11px;margin:4px 0}
 <!-- 执行器控制 -->
 <div class="card">
   <h2>执行器控制</h2>
-  <div class="actrow"><span class="lbl">水泵</span><button class="green" onclick="act('PUMP ON')">开</button><button class="gray" onclick="act('PUMP OFF')">关</button></div>
-  <div class="actrow"><span class="lbl">风扇</span><button class="green" onclick="act('FAN FWD')">正转</button><button class="red" onclick="act('FAN REV')">反转</button><button class="gray" onclick="act('FAN STOP')">停</button></div>
+  <div class="actrow"><span class="lbl">水泵</span><button class="green" onclick="act('PUMP ON')">开</button><button class="gray" onclick="act('PUMP OFF')">关</button><span class="astat" id="st_pump">--</span></div>
+  <div class="actrow"><span class="lbl">风扇</span><button class="green" onclick="act('FAN FWD')">正转</button><button class="red" onclick="act('FAN REV')">反转</button><button class="gray" onclick="act('FAN STOP')">停</button><span class="astat" id="st_fan">--</span></div>
   <div class="actrow"><span class="lbl">舵机</span><input type="range" id="servo" min="0" max="180" value="90" oninput="document.getElementById('servoVal').textContent=this.value" onchange="act('SERVO '+this.value)"><span class="servoval" id="servoVal">90</span>°</div>
 </div>
 
@@ -200,6 +203,17 @@ function refreshSensors(){
   else{q('s_soil','干燥');document.getElementById('b_soil').style.width='20%';document.getElementById('b_soil').className='barfill warn'}
   setSensor('co2',d.co2,'ppm',d.co2===null?0:Math.min((d.co2-400)/1600,1),d.co2!==null&&d.co2>1200);
   setSensor('tvoc',d.tvoc,'ppb',d.tvoc===null?0:Math.min(d.tvoc/1000,1),d.tvoc!==null&&d.tvoc>500);
+  // 执行器实时状态(从机回报)
+  const sp=document.getElementById('st_pump');
+  sp.textContent=d.pump===1?'开':'关';sp.className='astat'+(d.pump===1?' on':'');
+  const sf=document.getElementById('st_fan');
+  const fn=d.fan===1?'正转':(d.fan===2?'反转':'停');
+  sf.textContent=fn;sf.className='astat'+(d.fan>0?' act':'');
+  // 舵机角度同步(仅文本;滑条拖动中不强制覆盖)
+  if(document.activeElement!==document.getElementById('servo')){
+    document.getElementById('servoVal').textContent=d.servo;
+    document.getElementById('servo').value=d.servo;
+  }
 }
 
 /* ---------- 执行器控制(发命令到端口 8000) ---------- */
@@ -384,6 +398,10 @@ static void handlePorts() {
     j += ",\"soil\":" + (s.soil < 0 ? String("null") : String(s.soil));
     j += ",\"co2\":" + (isnan(s.co2) ? String("null") : String((int)s.co2));
     j += ",\"tvoc\":" + (isnan(s.tvoc) ? String("null") : String((int)s.tvoc));
+    // 执行器实时状态
+    j += ",\"pump\":" + String(s.pump);
+    j += ",\"fan\":" + String(s.fan);
+    j += ",\"servo\":" + String(s.servo);
     j += ",\"log\":[";
     for (uint8_t k = 0; k < s.logLen; k++) {
       if (k) j += ",";

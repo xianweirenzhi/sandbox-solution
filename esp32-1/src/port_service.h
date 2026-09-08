@@ -23,6 +23,10 @@ struct PortSnapshot {
   int8_t   soil = -1;            // 土壤 -1=无 0=干 1=湿
   float    co2 = 0.0f;           // eCO₂ ppm(NaN=无)
   float    tvoc = 0.0f;          // TVOC ppb(NaN=无)
+  // 从机上报的执行器实时状态
+  uint8_t  pump = 0;             // 水泵 0=关 1=开
+  uint8_t  fan = 0;              // 风扇 0=OFF 1=FWD 2=REV
+  uint8_t  servo = 90;           // 舵机角度 0~180
 };
 
 // 从机通信服务:开启 PORT_COUNT 个连续 TCP 端口,提供收发与状态查询
