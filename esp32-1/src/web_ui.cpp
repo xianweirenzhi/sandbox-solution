@@ -162,7 +162,8 @@ async function refreshStatus(){
 
 /* ---------- 传感数据(取端口 0 = F8266-1) ---------- */
 function setSensor(key,val,unit,pct,warn){
-  q('s_'+key,val===null?'--':val+'<small>'+unit+'</small>');
+  // 此处需渲染 <small> 单位标签,须用 innerHTML 而非 textContent(q)
+  document.getElementById('s_'+key).innerHTML = val===null?'--':val+'<small>'+unit+'</small>';
   const bar=document.getElementById('b_'+key);
   bar.style.width=(pct*100)+'%';
   bar.className='barfill'+(warn?' warn':'');
