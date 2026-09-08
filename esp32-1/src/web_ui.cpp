@@ -133,15 +133,15 @@ footer{text-align:center;color:#aaa;font-size:11px;margin:4px 0}
   <h2>执行器控制</h2>
   <div class="actrow"><span class="lbl">水泵</span><button class="green" onclick="act('PUMP ON')">开</button><button class="gray" onclick="act('PUMP OFF')">关</button><span class="astat" id="st_pump">--</span></div>
   <div class="actrow"><span class="lbl">风扇</span><button class="green" onclick="act('FAN FWD')">正转</button><button class="red" onclick="act('FAN REV')">反转</button><button class="gray" onclick="act('FAN STOP')">停</button><span class="astat" id="st_fan">--</span></div>
-  <div class="actrow"><span class="lbl">舵机</span><input type="range" id="servo" min="0" max="180" value="90" oninput="document.getElementById('servoVal').textContent=this.value" onchange="act('SERVO '+this.value)"><span class="servoval" id="servoVal">90</span>°</div>
+  <div class="actrow"><span class="lbl">舵机</span><input type="range" id="servo" min="0" max="180" value="0" oninput="document.getElementById('servoVal').textContent=this.value" onchange="act('SERVO '+this.value)"><span class="servoval" id="servoVal">0</span>°<span class="astat" id="st_servo">--</span></div>
 </div>
 
 <!-- 自动控制 -->
 <div class="card">
   <div class="cardhead"><h2>自动控制</h2><button id="autoBtn" class="gray" onclick="toggleAuto()">手动</button></div>
-  <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇</span></div>
-  <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇</span></div>
-  <div class="actrow"><span class="lbl">低湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发水泵</span></div>
+  <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇正转</span></div>
+  <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇正转</span></div>
+  <div class="actrow"><span class="lbl">高湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发风扇反转排湿</span></div>
   <div class="actrow"><button id="saveBtn" class="green" onclick="saveAuto()">保存阈值</button></div>
   <div id="rules"></div>
 </div>
@@ -209,9 +209,12 @@ function refreshSensors(){
   const sf=document.getElementById('st_fan');
   const fn=d.fan===1?'正转':(d.fan===2?'反转':'停');
   sf.textContent=fn;sf.className='astat'+(d.fan>0?' act':'');
-  // 舵机角度同步(仅文本;滑条拖动中不强制覆盖)
+  // 舵机=大棚:0°关 / 180°开(角度同步;滑条拖动中不强制覆盖)
+  const sv=document.getElementById('servoVal'),ss=document.getElementById('st_servo');
+  const gh=d.servo===0?'关棚':(d.servo===180?'开棚':('角度'+d.servo));
+  ss.textContent=gh;ss.className='astat'+(d.servo===180?' act':'');
   if(document.activeElement!==document.getElementById('servo')){
-    document.getElementById('servoVal').textContent=d.servo;
+    sv.textContent=d.servo;
     document.getElementById('servo').value=d.servo;
   }
 }
@@ -285,7 +288,7 @@ async function refreshAuto(){
     if(!autoInit){
       document.getElementById('ac_t').value=d.tHigh;
       document.getElementById('ac_co2').value=d.co2High;
-      document.getElementById('ac_h').value=d.hLow;
+      document.getElementById('ac_h').value=d.hHigh;
       autoInit=true;
     }
     const b=document.getElementById('autoBtn');
@@ -300,7 +303,7 @@ async function saveAuto(){
   const h=document.getElementById('ac_h').value;
   const en=document.getElementById('autoBtn').textContent==='自动';
   try{
-    const body=new URLSearchParams({enabled:String(en),tHigh:t,co2High:c,hLow:h});
+    const body=new URLSearchParams({enabled:String(en),tHigh:t,co2High:c,hHigh:h});
     const r=await(await fetch('/api/auto',{method:'POST',body:body})).json();
     if(r.ok){
       const sb=document.getElementById('saveBtn');
@@ -440,9 +443,10 @@ static void handleGetAuto() {
   j += "{\"enabled\":" + String(c.enabled ? "true" : "false");
   j += ",\"tHigh\":" + String(c.tHigh);
   j += ",\"co2High\":" + String(c.co2High);
-  j += ",\"hLow\":" + String(c.hLow);
-  j += ",\"fanActive\":" + String(auto_ctrl::fanActive() ? "true" : "false");
+  j += ",\"hHigh\":" + String(c.hHigh);
+  j += ",\"fanDir\":" + String(auto_ctrl::fanDir());   // 0=停 1=正转 2=反转
   j += ",\"pumpActive\":" + String(auto_ctrl::pumpActive() ? "true" : "false");
+  j += ",\"servoActive\":" + String(auto_ctrl::servoActive() ? "true" : "false");
   j += ",\"rules\":[";
   for (uint8_t i = 0; i < auto_ctrl::ruleCount(); i++) {
     if (i) j += ",";
@@ -454,9 +458,9 @@ static void handleGetAuto() {
   server.send(200, "application/json", j);
 }
 
-// /api/auto POST:保存配置(enabled/tHigh/co2High/hLow)并写 NVS
+// /api/auto POST:保存配置(enabled/tHigh/co2High/hHigh)并写 NVS
 static void handleSetAuto() {
-  if (!server.hasArg("tHigh") || !server.hasArg("co2High") || !server.hasArg("hLow")) {
+  if (!server.hasArg("tHigh") || !server.hasArg("co2High") || !server.hasArg("hHigh")) {
     server.send(400, "application/json",
                 "{\"ok\":false,\"error\":\"缺少阈值参数\"}");
     return;
@@ -465,7 +469,7 @@ static void handleSetAuto() {
   c.enabled = server.arg("enabled") == "true";
   c.tHigh   = server.arg("tHigh").toFloat();
   c.co2High = server.arg("co2High").toFloat();
-  c.hLow    = server.arg("hLow").toFloat();
+  c.hHigh   = server.arg("hHigh").toFloat();
   auto_ctrl::setConfig(c);
   server.send(200, "application/json", "{\"ok\":true}");
 }

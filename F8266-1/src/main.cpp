@@ -105,7 +105,7 @@ void setup() {
   // 子系统⑤：SGP30 空气质量传感器（同一 I2C 总线；eCO₂ 为 TVOC 推算等效值，15s 暖机）
   sgp30.begin();
 
-  // 执行实体：水泵/风扇/舵机（进入安全态：泵关/风扇停/舵机 90°；控制入口后续接主机命令/自动逻辑）
+  // 执行实体：水泵/风扇/舵机（进入安全态：泵关/风扇停/舵机 0°=关棚；控制入口接主机命令/自动逻辑）
   act.begin();
 
   // 上电自检：逐个激活执行器 0.5s 供人工检查接线/动作（阻塞式，联网前完成，约 2.4s）
@@ -138,7 +138,7 @@ void loop() {
   // （断线期间执行器已 allStop，主机旧显示可能不符）。均仅状态过渡触发一次。
   static bool wasOnline = false;
   if (wasOnline && !link.isOnline()) {
-    act.allStop();            // 泵关 + 风扇停 + 舵机回中位
+    act.allStop();            // 泵关 + 风扇停 + 舵机回 0°(大棚关)
   } else if (!wasOnline && link.isOnline()) {
     reportSensors();          // 重连（含首次上线）：立即补发设备状态
   }

@@ -46,13 +46,16 @@
 #define HOST_ANNOUNCE_PREFIX      "ESP32HOST"  // 载荷前缀: ESP32HOST,<ip>,<base>,<count>
 
 // ---------- 阈值自动控制(网页可改,存 NVS 覆盖以下默认) ----------
-// 高温→风扇 / 高CO₂→风扇 / 土壤干→水泵 / 低湿→水泵;滞回 + 连续 N 次确认防抖
-#define AC_T_HIGH      30.0f     // 高温触发阈值 ℃
+// 智能大棚:高温/高CO₂→风扇正转散热;高湿→风扇反转排湿(正转优先于反转);
+// 温/CO₂/高湿任一超阈 120% → 开大棚(舵机 180°),全回阈值内→关棚(0°);
+// 土壤干→水泵浇水。滞回 + 连续 N 次确认防抖。
+#define AC_T_HIGH      30.0f     // 高温触发阈值 ℃(正转散热)
 #define AC_T_HYST      2.0f      // 温度滞回 ℃(固定,不暴露网页)
-#define AC_CO2_HIGH    1200.0f   // 高 CO₂ 触发阈值 ppm
+#define AC_CO2_HIGH    1200.0f   // 高 CO₂ 触发阈值 ppm(正转散热)
 #define AC_CO2_HYST    200.0f    // CO₂ 滞回 ppm(固定)
-#define AC_H_LOW       40.0f     // 低湿触发阈值 %
+#define AC_H_HIGH      70.0f     // 高湿触发阈值 %(风扇反转排湿)
 #define AC_H_HYST      5.0f      // 湿度滞回 %(固定)
+#define AC_OVER_PCT    20        // 大棚超阈百分比(温/CO₂/高湿任一超此百分比即开棚;固定,默认20%)
 #define AC_CONFIRM_N   3         // 连续越界/回安全区次数(约 6s,2s 一次上报)
 #define AC_SAMPLE_MS   2000UL    // 自动判断周期(与从机上报周期对齐)
 

@@ -15,7 +15,7 @@
 #define FAN_ON     LOW    // 风扇：低电平触发（开）
 #define FAN_OFF    HIGH   // 风扇：高电平停止（安全态）
 
-#define SERVO_CENTER_DEG  90    // 上电/初始化舵机中位角
+#define SERVO_CENTER_DEG  0     // 舵机安全位=大棚关(业务语义:0°=关棚 180°=开棚;原 90° 中位已弃)
 
 // ===================== 实现体 =====================
 struct ActuatorCtrl::Impl {
@@ -65,13 +65,13 @@ bool ActuatorCtrl::begin() {
   _p->pumpOn = false;
   _p->fan = 0;
 
-  // 2) 舵机回中位（attach 后库立即输出 50Hz 脉冲）
+  // 2) 舵机回安全位（attach 后库立即输出 50Hz 脉冲；0°=大棚关）
   _p->servo.attach(SERVO_PIN);
   _p->servoAttached = true;
   _p->servoDeg = SERVO_CENTER_DEG;
   _p->servo.write(_p->servoDeg);
 
-  Serial.println(F("[act] 执行器就绪（安全态：泵关/风扇停/舵机90°）"));
+  Serial.println(F("[act] 执行器就绪（安全态：泵关/风扇停/舵机0°关棚）"));
   return true;
 }
 
@@ -151,11 +151,11 @@ void ActuatorCtrl::selfTest() {
   fanStop();
   delay(200);
 
-  servoSet(180);                  // 舵机摆到 180° 0.5s 后回中
+  servoSet(180);                  // 舵机摆到 180°(开棚演示) 0.5s 后回关棚 0°
   delay(500);
   servoSet(SERVO_CENTER_DEG);
 
-  Serial.println(F("[act] ==== 自检完成，回到安全态（泵关/风扇停/舵机90°）===="));
+  Serial.println(F("[act] ==== 自检完成，回到安全态（泵关/风扇停/舵机0°关棚）===="));
 }
 
 // ---- 全停安全态（断连保护） ----
@@ -163,6 +163,6 @@ void ActuatorCtrl::selfTest() {
 void ActuatorCtrl::allStop() {
   pumpOff();
   fanStop();
-  servoSet(SERVO_CENTER_DEG);   // 舵机回中位
-  Serial.println(F("[act] 主机连接断开 → 全停安全态（泵关/风扇停/舵机90°）"));
+  servoSet(SERVO_CENTER_DEG);   // 舵机回关棚 0°
+  Serial.println(F("[act] 主机连接断开 → 全停安全态（泵关/风扇停/舵机0°关棚）"));
 }

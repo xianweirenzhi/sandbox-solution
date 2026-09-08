@@ -4,7 +4,7 @@
 
 ## 1. 项目简介
 
-ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动获取 IP，可配置固定 IP）连接路由器；若 2 分钟内无法连接，**自动切换 AP 直连兜底模式**。作为从机通信的**主机**，开启 **6 个连续 TCP 端口**（8000~8005）与从机（F8266-x）通信。网页提供「设备状态卡 + 传感数据卡（进度条图形化）+ 执行器控制 + 阈值自动控制 + 二级日志页」，可实时查看传感数据与执行器状态、各端口收发报文与从机上线状态，直接向从机发送命令、配置自动控制阈值。
+ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动获取 IP，可配置固定 IP）连接路由器；若 2 分钟内无法连接，**自动切换 AP 直连兜底模式**。作为从机通信的**主机**，开启 **6 个连续 TCP 端口**（8000~8005）与从机（F8266-x）通信。网页提供「精简设备状态卡 + 2×3 六端口收发窗口」，可实时查看各端口收发报文、从机上线状态，并直接向从机发送报文。
 
 本项目位于仓库 [sandbox-solution](https://github.com/xianweirenzhi/sandbox-solution)（公开）的 `esp32-1/` 子目录——仓库为多板卡项目集合，其他板卡项目以同级目录存放，详见仓库根 [README](../README.md)。硬件：4D Systems gen4-ESP32S3 (R8N16)，框架：Arduino (PlatformIO)。
 
@@ -15,9 +15,9 @@ ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动�
 - [x] 6 个连续 TCP 端口（8000~8005）作为主机监听从机连接，`@命令/` 帧式报文收发
 - [x] 从机上线协议：收到 `@F8266-x online/` 后对应端口窗口标记「F8266-x 已上线」，断开自动标记离线
 - [x] 网页：设备状态卡 + **传感数据卡（6 指标进度条图形化）** + **执行器控制按键（水泵/风扇/舵机）** + 二级日志页（原 2×3 收发窗口收进，点击「通信日志」展开）
-- [x] `/api/status`、`/api/ports`（端口状态 + 最新传感数据）JSON 接口，`/api/send`（向端口发报文/执行器命令）、`/api/auto`（读写自动控制配置与规则状态）
+- [x] `/api/status`、`/api/ports`（端口状态 + 最新传感数据）JSON 接口，`/api/send`（向端口发报文/执行器命令）
 - [x] 主机 UDP 广播宣告：STA 在线时周期向局域网广播自身 IP/端口，**从机 F8266-x 可动态发现主机**（主机 DHCP 动态 IP 也能被找到）
-- [x] **阈值自动控制**：4 条规则（高温→风扇 / 高CO₂→风扇 / 土壤干→水泵 / 低湿→水泵），滞回 + 连续 N 次确认防抖，越界自动下发执行器命令；网页可改阈值 + 自动/手动总开关，配置存 NVS 重启保留
+- [x] **阈值自动控制（智能大棚）**：高温/高CO₂→风扇**正转**散热，高空气湿度→风扇**反转**排湿（高温高湿优先正转）；温/CO₂/高湿任一超阈 20% → 开大棚（舵机 180°），全回阈值内→关棚（0°）；土壤干→水泵浇水；滞回 + 连续 N 次确认防抖，每周期按从机回报校正期望状态；网页可改阈值 + 自动/手动总开关，配置存 NVS 重启保留
 - [x] mDNS：支持 `http://esp32s3.local` 访问（部分设备/浏览器支持）
 - [x] 串口 5 秒心跳回报（AP 模式下含已连接客户端数量）
 
@@ -30,7 +30,7 @@ ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动�
 | 开发板 | `4d_systems_esp32s3_gen4_r8n16`（ESP32-S3, 16MB Flash / 8MB PSRAM） |
 | 框架 | Arduino |
 | 串口 | 115200，USB CDC（板定义已内置，无需额外编译标志） |
-| 外部库 | `bblanchon/ArduinoJson`（传感数据帧解析）；其余用核心自带 WiFi / WebServer / ESPmDNS |
+| 外部库 | 无（仅使用核心自带 WiFi / WebServer / ESPmDNS） |
 
 ## 4. 目录结构
 
@@ -45,11 +45,11 @@ F_C_S3/
     ├── device_status.h/.cpp 状态采集：collectStatus() 返回 DeviceStatus 结构体
     ├── port_service.h/.cpp  从机通信：6 个 TCP 端口收发、上线报文识别、传感 JSON 解析存储、TCP keepalive 掉电探测、日志环形缓冲
     ├── host_announce.h/.cpp 主机 UDP 广播宣告：周期广播自身 IP/端口，供从机动态发现
-    ├── auto_ctrl.h/.cpp     阈值自动控制：4 规则滞回+防抖，越界自动下发执行器命令，配置存 NVS
-    └── web_ui.h/.cpp     网页服务：页面 HTML（状态卡+数据卡+执行器+自动控制+日志二级页）、路由注册、各 JSON 接口
+    ├── auto_ctrl.h/.cpp     智能大棚自动控制：4 规则+大棚(舵机0/180)滞回防抖，每周期按回报校正，配置存 NVS
+    └── web_ui.h/.cpp     网页服务：页面 HTML（状态卡+数据卡+执行器+日志二级页）、路由注册、各 JSON 接口
 ```
 
-**分层依赖**：`main` → `wifi_service` / `port_service` / `web_ui` / `device_status` / `host_announce` / `auto_ctrl`；`web_ui`、`device_status` → `wifi_service`（读取当前模式）；`web_ui` → `port_service`（端口/传感快照）、`web_ui` → `auto_ctrl`（自动控制配置与规则状态）、`auto_ctrl` → `port_service`（读传感数据、下发命令）；参数统一来自 `config.h`。
+**分层依赖**：`main` → `wifi_service` / `port_service` / `web_ui` / `device_status`；`web_ui`、`device_status` → `wifi_service`（读取当前模式）；`web_ui` → `port_service`（读取端口快照）；参数统一来自 `config.h`。
 
 ## 5. 快速开始
 
@@ -103,12 +103,13 @@ pio device monitor     # 串口监视
 | `HOST_ANNOUNCE_PORT` | `45555` | 主机 UDP 广播端口（从机 `NET_HOST_ANNOUNCE_PORT` 须一致） |
 | `HOST_ANNOUNCE_INTERVAL_MS` | `3000` | 广播间隔（ms） |
 | `HOST_ANNOUNCE_PREFIX` | `"ESP32HOST"` | 宣告载荷前缀，格式 `ESP32HOST,<ip>,<base>,<count>` |
-| `AC_T_HIGH` | `30.0` | 高温触发阈值 ℃（网页可改，存 NVS 覆盖） |
+| `AC_T_HIGH` | `30.0` | 高温触发阈值 ℃（风扇正转散热；网页可改，存 NVS 覆盖） |
 | `AC_T_HYST` | `2.0` | 温度滞回 ℃（固定，不暴露网页） |
-| `AC_CO2_HIGH` | `1200` | 高 CO₂ 触发阈值 ppm |
+| `AC_CO2_HIGH` | `1200` | 高 CO₂ 触发阈值 ppm（风扇正转散热） |
 | `AC_CO2_HYST` | `200` | CO₂ 滞回 ppm（固定） |
-| `AC_H_LOW` | `40.0` | 低湿触发阈值 % |
+| `AC_H_HIGH` | `70.0` | 高空气湿度触发阈值 %（风扇反转排湿；网页可改） |
 | `AC_H_HYST` | `5.0` | 湿度滞回 %（固定） |
+| `AC_OVER_PCT` | `20` | 大棚超阈百分比：温/CO₂/高湿任一超其阈值此百分比即开棚（固定，默认 20%） |
 | `AC_CONFIRM_N` | `3` | 连续越界/回安全区次数（约 6s 防抖） |
 | `AC_SAMPLE_MS` | `2000` | 自动判断周期（与从机上报周期对齐） |
 
@@ -172,8 +173,8 @@ IP 地址  : 192.168.4.23
 | `/api/status` | GET | 设备状态 JSON |
 | `/api/ports` | GET | 6 个从机通信端口状态 JSON（数组，含最新传感数据） |
 | `/api/send` | POST | 向指定端口发送报文/命令，参数 `port`（端口号）、`text`（命令内容，自动包装为 `@内容/` 帧；执行器命令见下方词表） |
-| `/api/auto` | GET | 返回自动控制配置（enabled/tHigh/co2High/hLow/fanActive/pumpActive）与 4 条规则触发状态 |
-| `/api/auto` | POST | 保存自动控制配置，参数 `enabled`、`tHigh`、`co2High`、`hLow`，写入 NVS |
+| `/api/auto` | GET | 返回自动控制配置（enabled/tHigh/co2High/hHigh/fanDir/pumpActive/servoActive）与 4 条规则触发状态（fanDir: 0停/1正转/2反转；servoActive: 大棚应开） |
+| `/api/auto` | POST | 保存自动控制配置，参数 `enabled`、`tHigh`、`co2High`、`hHigh`，写入 NVS |
 | 其他 | — | 返回 404 |
 
 **`/api/ports` 返回字段（数组，每端口一项）：**
