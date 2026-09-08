@@ -4,7 +4,7 @@
 
 ## 1. 项目简介
 
-ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动获取 IP，可配置固定 IP）连接路由器；若 2 分钟内无法连接，**自动切换 AP 直连兜底模式**。作为从机通信的**主机**，开启 **6 个连续 TCP 端口**（8000~8005）与从机（F8266-x）通信。网页提供「精简设备状态卡 + 2×3 六端口收发窗口」，可实时查看各端口收发报文、从机上线状态，并直接向从机发送报文。
+ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动获取 IP，可配置固定 IP）连接路由器；若 2 分钟内无法连接，**自动切换 AP 直连兜底模式**。作为从机通信的**主机**，开启 **6 个连续 TCP 端口**（8000~8005）与从机（F8266-x）通信。网页提供「设备状态卡 + 传感数据卡（进度条图形化）+ 执行器控制 + 阈值自动控制 + 二级日志页」，可实时查看传感数据与执行器状态、各端口收发报文与从机上线状态，直接向从机发送命令、配置自动控制阈值。
 
 本项目位于仓库 [sandbox-solution](https://github.com/xianweirenzhi/sandbox-solution)（公开）的 `esp32-1/` 子目录——仓库为多板卡项目集合，其他板卡项目以同级目录存放，详见仓库根 [README](../README.md)。硬件：4D Systems gen4-ESP32S3 (R8N16)，框架：Arduino (PlatformIO)。
 
@@ -15,7 +15,7 @@ ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动�
 - [x] 6 个连续 TCP 端口（8000~8005）作为主机监听从机连接，`@命令/` 帧式报文收发
 - [x] 从机上线协议：收到 `@F8266-x online/` 后对应端口窗口标记「F8266-x 已上线」，断开自动标记离线
 - [x] 网页：设备状态卡 + **传感数据卡（6 指标进度条图形化）** + **执行器控制按键（水泵/风扇/舵机）** + 二级日志页（原 2×3 收发窗口收进，点击「通信日志」展开）
-- [x] `/api/status`、`/api/ports`（端口状态 + 最新传感数据）JSON 接口，`/api/send`（向端口发报文/执行器命令）
+- [x] `/api/status`、`/api/ports`（端口状态 + 最新传感数据）JSON 接口，`/api/send`（向端口发报文/执行器命令）、`/api/auto`（读写自动控制配置与规则状态）
 - [x] 主机 UDP 广播宣告：STA 在线时周期向局域网广播自身 IP/端口，**从机 F8266-x 可动态发现主机**（主机 DHCP 动态 IP 也能被找到）
 - [x] **阈值自动控制**：4 条规则（高温→风扇 / 高CO₂→风扇 / 土壤干→水泵 / 低湿→水泵），滞回 + 连续 N 次确认防抖，越界自动下发执行器命令；网页可改阈值 + 自动/手动总开关，配置存 NVS 重启保留
 - [x] mDNS：支持 `http://esp32s3.local` 访问（部分设备/浏览器支持）
@@ -30,7 +30,7 @@ ESP32-S3 主机设备项目：优先以 **STA 模式**（默认 **DHCP** 自动�
 | 开发板 | `4d_systems_esp32s3_gen4_r8n16`（ESP32-S3, 16MB Flash / 8MB PSRAM） |
 | 框架 | Arduino |
 | 串口 | 115200，USB CDC（板定义已内置，无需额外编译标志） |
-| 外部库 | 无（仅使用核心自带 WiFi / WebServer / ESPmDNS） |
+| 外部库 | `bblanchon/ArduinoJson`（传感数据帧解析）；其余用核心自带 WiFi / WebServer / ESPmDNS |
 
 ## 4. 目录结构
 
@@ -46,10 +46,10 @@ F_C_S3/
     ├── port_service.h/.cpp  从机通信：6 个 TCP 端口收发、上线报文识别、传感 JSON 解析存储、TCP keepalive 掉电探测、日志环形缓冲
     ├── host_announce.h/.cpp 主机 UDP 广播宣告：周期广播自身 IP/端口，供从机动态发现
     ├── auto_ctrl.h/.cpp     阈值自动控制：4 规则滞回+防抖，越界自动下发执行器命令，配置存 NVS
-    └── web_ui.h/.cpp     网页服务：页面 HTML（状态卡+数据卡+执行器+日志二级页）、路由注册、各 JSON 接口
+    └── web_ui.h/.cpp     网页服务：页面 HTML（状态卡+数据卡+执行器+自动控制+日志二级页）、路由注册、各 JSON 接口
 ```
 
-**分层依赖**：`main` → `wifi_service` / `port_service` / `web_ui` / `device_status`；`web_ui`、`device_status` → `wifi_service`（读取当前模式）；`web_ui` → `port_service`（读取端口快照）；参数统一来自 `config.h`。
+**分层依赖**：`main` → `wifi_service` / `port_service` / `web_ui` / `device_status` / `host_announce` / `auto_ctrl`；`web_ui`、`device_status` → `wifi_service`（读取当前模式）；`web_ui` → `port_service`（端口/传感快照）、`web_ui` → `auto_ctrl`（自动控制配置与规则状态）、`auto_ctrl` → `port_service`（读传感数据、下发命令）；参数统一来自 `config.h`。
 
 ## 5. 快速开始
 
