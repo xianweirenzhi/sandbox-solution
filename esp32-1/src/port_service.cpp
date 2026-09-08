@@ -64,6 +64,8 @@ static void parseOnline(PortCtx &p, const String &cmd) {
 static void parseData(PortCtx &p, const String &cmd) {
   JsonDocument doc;
   if (deserializeJson(doc, cmd)) return;   // 解析失败(非数据帧/损坏)忽略
+  // 数据帧不逐条刷日志(高频 2s 一次会淹没日志)；仅在首条打印一次
+  if (!p.hasData) pushLog(p, timeStamp() + " ⚙ 开始接收传感数据");
   p.hasData = true;
   p.t    = doc["t"].is<float>()    ? doc["t"].as<float>()    : NAN;
   p.h    = doc["h"].is<float>()    ? doc["h"].as<float>()    : NAN;
@@ -71,9 +73,6 @@ static void parseData(PortCtx &p, const String &cmd) {
   p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;
   p.co2  = doc["co2"].is<float>()  ? doc["co2"].as<float>()  : NAN;
   p.tvoc = doc["tvoc"].is<float>() ? doc["tvoc"].as<float>() : NAN;
-  // 数据帧不逐条刷日志(高频 2s 一次会淹没日志)；仅在首条打印一次
-  if (!p.hasData) pushLog(p, timeStamp() + " ⚙ 开始接收传感数据");
-  p.hasData = true;
 }
 
 // 端口内无连接时,若曾上线则标记离线
