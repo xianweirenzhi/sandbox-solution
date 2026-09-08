@@ -20,7 +20,7 @@ Bh1750Sensor gy30;    // 子系统②：光照采集（GY-30/BH1750，I2C 0x23�
 Mq2Sensor mq2;        // 子系统③：可燃气体采集（MQ-2，ADC 独立 5V 供电+共地+分压）
 SoilSensor soil;      // 子系统④：土壤湿度监测（DO→GPIO14，3V3 供电，1s 环境消抖）
 Sgp30Sensor sgp30;    // 子系统⑤：空气质量 eCO₂/TVOC（SGP30，I2C 0x58，共线）
-ActuatorCtrl act;     // 执行实体：水泵（GPIO13）/风扇正反转（GPIO0/16）/舵机（GPIO12）
+ActuatorCtrl act;     // 执行实体：水泵（GPIO13）/风扇正反转（GPIO2/16）/舵机（GPIO12）
 
 // ===================== 业务命令扩展口 =====================
 // 收到主机下发命令【内容】时回调这里（帧头 @ / 帧尾 / 已由 host_link 剥离）。

@@ -5,7 +5,7 @@
 
 // ===================== 引脚与极性参数（改接线只动这里）=====================
 #define PUMP_PIN      13    // 水泵驱动 IN（低电平开启）
-#define FAN_FWD_PIN   0     // 风扇正转驱动 IN（低电平触发；GPIO0 烧录时被拉低→烧录期间风扇会短暂开启，属已知现象）
+#define FAN_FWD_PIN   2     // 风扇正转驱动 IN（低电平触发；GPIO2 为 boot 脚上电需高，低触发设备上电默认关=安全）
 #define FAN_REV_PIN   16    // 风扇反转驱动 IN（低电平触发）
 #define SERVO_PIN     12    // 舵机信号线（50Hz PWM）
 
