@@ -4,8 +4,8 @@
 #include "actuator_ctrl.h"
 
 // ===================== 引脚与极性参数（改接线只动这里）=====================
-#define PUMP_PIN      13    // 水泵驱动 IN（低电平开启）
-#define FAN_FWD_PIN   2     // 风扇正转驱动 IN（低电平触发；GPIO2 为 boot 脚上电需高，低触发设备上电默认关=安全）
+#define PUMP_PIN      0     // 水泵驱动 IN（低电平开启）；★GPIO0 为烧录脚，烧录/上传固件时被拉低→水泵会误开喷水，烧录前务必断水断电（用户已知情接受）
+#define FAN_FWD_PIN   13    // 风扇正转驱动 IN（低电平触发）
 #define FAN_REV_PIN   16    // 风扇反转驱动 IN（低电平触发）
 #define SERVO_PIN     12    // 舵机信号线（50Hz PWM）
 
