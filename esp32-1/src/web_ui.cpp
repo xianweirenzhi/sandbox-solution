@@ -139,7 +139,7 @@ footer{text-align:center;color:#aaa;font-size:11px;margin:4px 0}
   <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇</span></div>
   <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇</span></div>
   <div class="actrow"><span class="lbl">低湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发水泵</span></div>
-  <div class="actrow"><button class="green" onclick="saveAuto()">保存阈值</button></div>
+  <div class="actrow"><button id="saveBtn" class="green" onclick="saveAuto()">保存阈值</button></div>
   <div id="rules"></div>
 </div>
 
@@ -259,16 +259,21 @@ refreshStatus();setInterval(refreshStatus,2000);
 refreshPorts();setInterval(refreshPorts,1500);
 
 /* ---------- 自动控制 ---------- */
+let autoInit=false;
 function renderRules(rules){
   document.getElementById('rules').innerHTML=rules.map(r=>
     '<div class="rule'+(r.active?' on':'')+'"><span class="rdot"></span>'+r.name+(r.active?' 已触发':' 未触发')+'</div>').join('');
 }
-async function loadAuto(){
+async function refreshAuto(){
   try{
     const d=await(await fetch('/api/auto')).json();
-    document.getElementById('ac_t').value=d.tHigh;
-    document.getElementById('ac_co2').value=d.co2High;
-    document.getElementById('ac_h').value=d.hLow;
+    // 仅首次加载填充输入框;之后不再覆盖,避免冲掉用户正在编辑的阈值
+    if(!autoInit){
+      document.getElementById('ac_t').value=d.tHigh;
+      document.getElementById('ac_co2').value=d.co2High;
+      document.getElementById('ac_h').value=d.hLow;
+      autoInit=true;
+    }
     const b=document.getElementById('autoBtn');
     b.textContent=d.enabled?'自动':'手动';
     b.className=d.enabled?'green':'gray';
@@ -283,7 +288,12 @@ async function saveAuto(){
   try{
     const body=new URLSearchParams({enabled:String(en),tHigh:t,co2High:c,hLow:h});
     const r=await(await fetch('/api/auto',{method:'POST',body:body})).json();
-    if(r.ok)loadAuto(); else alert('保存失败：'+(r.error||''));
+    if(r.ok){
+      const sb=document.getElementById('saveBtn');
+      sb.textContent='已保存 ✓'; sb.disabled=true;
+      setTimeout(()=>{sb.textContent='保存阈值';sb.disabled=false},1500);
+      refreshAuto();
+    } else alert('保存失败：'+(r.error||''));
   }catch(e){alert('保存失败：网络错误')}
 }
 async function toggleAuto(){
@@ -293,7 +303,7 @@ async function toggleAuto(){
   b.className=nowAuto?'gray':'green';
   await saveAuto();
 }
-loadAuto();setInterval(loadAuto,2000);
+refreshAuto();setInterval(refreshAuto,2000);
 </script>
 </body>
 </html>
