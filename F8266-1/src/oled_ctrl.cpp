@@ -7,12 +7,12 @@
 #include "oled_ctrl.h"
 
 // ===================== 显示参数（改地址只动这里）=====================
-// I2C 引脚集中定义在 net_config.h（与 SHT30/GY-30 共线）；0.96" SSD1306 常见地址 0x3C（部分模组 0x3D）
+// I2C 引脚集中定义在 net_config.h（与 SHT30/GY-30/SGP30 共线）；0.96" SSD1306 常见地址 0x3C（部分模组 0x3D）
 #define OLED_I2C_ADDR  0x3C
 #define OLED_WIDTH     128
 #define OLED_HEIGHT    64
-#define OLED_INFO_ROWS 4    // 信息区行数（标题区 3 行之后，8 行屏共余 5 行取 4）
-#define OLED_INFO_Y    24   // 信息区首行纵坐标（标题区 3 行之后，单位像素）
+#define OLED_INFO_ROWS 6    // 信息区行数（标题区压缩为 1 行后，8 行屏余 7 行取 6）
+#define OLED_INFO_Y    8    // 信息区首行纵坐标（标题行之后，单位像素）
 
 // ===================== 实现体 =====================
 struct OledCtrl::Impl {
@@ -66,15 +66,14 @@ void OledCtrl::handle() {
 // ===================== 私有实现 =====================
 
 void OledCtrl::render() {
-  // 标题区：设备名 / 项目名 / OLED 自身状态（ASCII，128×64 小屏以简短英文为宜）
-  // 信息区：各子系统写入的状态文本（如 "T:25.3C H:56%" / "L:1234lx"），未写入的行留空
+  // 标题行：设备名 + 项目名合并一行（激活验证期单独的 "OLED OK" 行已退役，让位给子系统）
+  // 信息区：各子系统写入的状态文本（如 "T:25.3C H:56%" / "C:800ppm V:12ppb"），未写入的行留空
   _p->display.clearDisplay();
   _p->display.setTextSize(1);
   _p->display.setTextColor(SSD1306_WHITE);
   _p->display.setCursor(0, 0);
-  _p->display.println(NET_DEVICE_NAME);     // F8266-1
-  _p->display.println(F("SmartFarm"));
-  _p->display.println(F("OLED OK"));
+  _p->display.print(NET_DEVICE_NAME);       // F8266-1
+  _p->display.print(F(" SmartFarm"));
   for (uint8_t i = 0; i < OLED_INFO_ROWS; i++) {
     if (!_p->hasInfo[i]) continue;
     _p->display.setCursor(0, OLED_INFO_Y + i * 8);  // 每行 8 像素（size 1）

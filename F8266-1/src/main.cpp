@@ -8,6 +8,8 @@
 #include "bh1750_sensor.h" // GY-30(BH1750) 光照采集模块对外接口
 #include "mq2_sensor.h"   // MQ-2 可燃气体采集模块对外接口
 #include "soil_sensor.h"  // 土壤湿度监测模块对外接口
+#include "sgp30_sensor.h" // SGP30 空气质量采集模块对外接口
+#include "actuator_ctrl.h" // 执行器模块（水泵/风扇/舵机）对外接口
 
 // 全局模块实例（业务模块后续在此按需添加同类实例）
 WifiNet net;
@@ -17,6 +19,8 @@ Sht30Sensor sht30;    // 子系统①：温湿度采集（I2C 0x44，与 OLED �
 Bh1750Sensor gy30;    // 子系统②：光照采集（GY-30/BH1750，I2C 0x23，共线）
 Mq2Sensor mq2;        // 子系统③：可燃气体采集（MQ-2，ADC 独立 5V 供电+共地+分压）
 SoilSensor soil;      // 子系统④：土壤湿度监测（DO→GPIO14，3V3 供电，1s 环境消抖）
+Sgp30Sensor sgp30;    // 子系统⑤：空气质量 eCO₂/TVOC（SGP30，I2C 0x58，共线）
+ActuatorCtrl act;     // 执行实体：水泵（GPIO13）/风扇正反转（GPIO0/16）/舵机（GPIO12）
 
 // ===================== 业务命令扩展口 =====================
 // 收到主机下发命令【内容】时回调这里（帧头 @ / 帧尾 / 已由 host_link 剥离）。
@@ -54,6 +58,12 @@ void setup() {
   // 子系统④：土壤湿度传感器（DO 数字量→GPIO14；高=湿润适宜，低=过干，1s 环境消抖）
   soil.begin();
 
+  // 子系统⑤：SGP30 空气质量传感器（同一 I2C 总线；eCO₂ 为 TVOC 推算等效值，15s 暖机）
+  sgp30.begin();
+
+  // 执行实体：水泵/风扇/舵机（进入安全态：泵关/风扇停/舵机 90°；控制入口后续接主机命令/自动逻辑）
+  act.begin();
+
   if (!net.begin()) {
     // begin() 内部失败会自重启，正常情况下不会走到这里（防御性处理）
     Serial.println(F("[main] 联网失败，重启"));
@@ -73,6 +83,8 @@ void loop() {
   gy30.handle();   // 子系统②：光照周期采集（健康判定 + 热插拔重扫）
   mq2.handle();    // 子系统③：可燃气体周期采集（预热/报警/合理性监测）
   soil.handle();   // 子系统④：土壤湿度监测（1s 环境消抖）
+  sgp30.handle();  // 子系统⑤：空气质量周期采集（暖机/健康/热插拔重扫）
+  act.handle();    // 执行实体周期维护（预留：缓动/超时保护）
 
   // 子系统状态上屏（信息区每子系统一行；后续子系统在此追加各行）
   static uint32_t lastUiMs = 0;
@@ -117,6 +129,30 @@ void loop() {
 
     // 行 3：土壤湿度（已消抖判定）
     oled.setInfoLine(3, soil.isMoist() ? F("SOIL:WET") : F("SOIL:DRY"));
+
+    // 行 4：SGP30 空气质量（eCO₂ 等效值 + TVOC）
+    if (!sgp30.isOk()) {
+      oled.setInfoLine(4, F("SGP30 ERR"));
+    } else if (sgp30.isWarmup()) {
+      oled.setInfoLine(4, F("SGP30 INIT"));   // 上电 15s 暖机，读数尚未可靠
+    } else if (!sgp30.hasData()) {
+      oled.setInfoLine(4, F("SGP30 ..."));    // 已检测到，等待首次读数
+    } else {
+      char line[24];
+      snprintf(line, sizeof(line), "C:%uppm V:%uppb",
+               (unsigned)sgp30.getEco2Ppm(), (unsigned)sgp30.getTvocPpb());
+      oled.setInfoLine(4, line);
+    }
+
+    // 行 5：执行器状态（水泵/风扇/舵机；控制入口接入后此行实时反映）
+    {
+      char line[24];
+      snprintf(line, sizeof(line), "P:%s F:%s S:%u",
+               act.pumpIsOn() ? "ON" : "OFF",
+               act.fanState() == 1 ? "FWD" : (act.fanState() == 2 ? "REV" : "OFF"),
+               (unsigned)act.servoGet());
+      oled.setInfoLine(5, line);
+    }
   }
 
   // ===== 业务模块扩展位 =====

@@ -20,7 +20,7 @@ class OledCtrl {
   // 屏是否初始化成功（供主逻辑 / 串口查询）
   bool isOk() const;
 
-  // 更新信息区某一行（row：0~3，标题区下方依次 4 行，对应子系统各占一行）：
+  // 更新信息区某一行（row：0~5，标题行下方依次 6 行，对应子系统各占一行）：
   // 写入状态文本，行内容变化才重绘；传空串清除该行。row 越界忽略。
   void setInfoLine(uint8_t row, const String &text);
 
