@@ -68,7 +68,7 @@
 
   <!-- 标题 -->
   <text class="t-title" x="580" y="34" text-anchor="middle">sandbox-solution 预期完整拓扑</text>
-  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 1 主机 + 6 从机位 + 浏览器控制台 · 进度基线 2026-09-06</text>
+  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 1 主机 + 6 从机位 + 浏览器控制台 · 进度基线 2026-09-08</text>
 
   <!-- ① 用户层 -->
   <rect class="node" x="380" y="82" width="400" height="52" rx="10" />
@@ -133,9 +133,9 @@
     <circle class="dot-good" cx="148" cy="576" r="4" />
     <text class="t-chip" x="159" y="580">已实现</text>
     <text class="t-small" x="170" y="600" text-anchor="middle">智慧农场状态节点</text>
-    <text class="t-small" x="170" y="616" text-anchor="middle">OLED：SSD1306</text>
-    <text class="t-small" x="170" y="632" text-anchor="middle">I2C GPIO4/5 @0x3C</text>
-    <text class="t-small" x="170" y="648" text-anchor="middle">状态可视化起步</text>
+    <text class="t-small" x="170" y="616" text-anchor="middle">4 传感子系统已接入</text>
+    <text class="t-small" x="170" y="632" text-anchor="middle">SHT30·BH1750·MQ2·土壤</text>
+    <text class="t-small" x="170" y="648" text-anchor="middle">OLED 信息区 4 行满员</text>
   </g>
   <g>
     <rect class="node plan" x="264" y="536" width="140" height="140" rx="10" />
