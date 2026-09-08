@@ -133,6 +133,17 @@ void loop() {
   sgp30.handle();  // 子系统⑤：空气质量周期采集（暖机/健康/热插拔重扫）
   act.handle();    // 执行实体周期维护（预留：缓动/超时保护）
 
+  // ★断连保护 + 重连补报：与主机连接断开（TCP 断 / WiFi 断）即全停执行器；
+  // 重连成功立即补发一次设备状态（传感 + 执行器实时态），让主机快速同步
+  // （断线期间执行器已 allStop，主机旧显示可能不符）。均仅状态过渡触发一次。
+  static bool wasOnline = false;
+  if (wasOnline && !link.isOnline()) {
+    act.allStop();            // 泵关 + 风扇停 + 舵机回中位
+  } else if (!wasOnline && link.isOnline()) {
+    reportSensors();          // 重连（含首次上线）：立即补发设备状态
+  }
+  wasOnline = link.isOnline();
+
   // 传感数据周期上报主机（每 NET_REPORT_MS 一次；不含 MQ-2）
   static uint32_t lastReportMs = 0;
   if (millis() - lastReportMs >= NET_REPORT_MS) {

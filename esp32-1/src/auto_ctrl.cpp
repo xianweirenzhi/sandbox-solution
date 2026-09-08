@@ -113,18 +113,23 @@ void loop() {
   updateRule(s_rules[R_SOIL], overSoil(s.soil), safeSoil(s.soil));
   updateRule(s_rules[R_HUM],  overHum(s.h),    safeHum(s.h));
 
-  // 聚合 + 状态翻转才下发
-  bool fan  = s_rules[R_TEMP].active || s_rules[R_CO2].active;
-  bool pump = s_rules[R_SOIL].active || s_rules[R_HUM].active;
+  // 期望状态(规则聚合)
+  bool wantFan  = s_rules[R_TEMP].active || s_rules[R_CO2].active;
+  bool wantPump = s_rules[R_SOIL].active || s_rules[R_HUM].active;
 
-  if (fan != s_fanActive) {
-    s_fanActive = fan;
-    sendCmd(fan ? "FAN FWD" : "FAN STOP");
+  // ★每周期「期望 vs 从机实际回报」校正:不只状态翻转时下发。
+  // 覆盖手动篡改/丢包/自动↔手动切换等导致的失配——例如自动已开风扇后
+  // 切手动关掉再切回自动,下一周期发现实际≠期望即重新下发恢复。
+  // 仅在线且回报过数据才校正(避免向空连接发命令);失配持续则每周期补发(自愈)。
+  if (s.online && s.hasData) {
+    bool fanActOk  = (wantFan ? (s.fan == 1) : (s.fan == 0));   // 期望转=正转,期望停=停
+    bool pumpActOk = (wantPump ? (s.pump == 1) : (s.pump == 0));
+    if (!fanActOk)  sendCmd(wantFan ? "FAN FWD" : "FAN STOP");
+    if (!pumpActOk) sendCmd(wantPump ? "PUMP ON" : "PUMP OFF");
   }
-  if (pump != s_pumpActive) {
-    s_pumpActive = pump;
-    sendCmd(pump ? "PUMP ON" : "PUMP OFF");
-  }
+
+  s_fanActive = wantFan;   // 记录本周期期望(供网页状态灯与下次校正)
+  s_pumpActive = wantPump;
 }
 
 Config getConfig() { return s_cfg; }

@@ -157,3 +157,12 @@ void ActuatorCtrl::selfTest() {
 
   Serial.println(F("[act] ==== 自检完成，回到安全态（泵关/风扇停/舵机90°）===="));
 }
+
+// ---- 全停安全态（断连保护） ----
+
+void ActuatorCtrl::allStop() {
+  pumpOff();
+  fanStop();
+  servoSet(SERVO_CENTER_DEG);   // 舵机回中位
+  Serial.println(F("[act] 主机连接断开 → 全停安全态（泵关/风扇停/舵机90°）"));
+}
