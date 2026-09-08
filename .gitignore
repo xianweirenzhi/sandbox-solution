@@ -3,3 +3,5 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+# 二进制文档(架构 md 已为源,docx 为 Word 导出物,不入库)
+ARCHITECTURE.docx
