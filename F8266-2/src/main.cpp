@@ -4,8 +4,7 @@
 #include "wifi_net.h"     // 网络模块对外接口
 #include "host_link.h"    // 主机通信模块对外接口
 #include "oled_ctrl.h"    // OLED 状态可视化层模块对外接口
-#include "sht30_sensor.h" // SHT30 温湿度采集模块对外接口
-#include "bh1750_sensor.h" // GY-30(BH1750) 光照采集模块对外接口
+#include "gy39_sensor.h"  // GY-39 气象二合一（温湿度/气压/光照）模块对外接口
 #include "soil_sensor.h"  // 土壤湿度监测模块对外接口
 #include "sgp30_sensor.h" // SGP30 空气质量采集模块对外接口
 #include "actuator_ctrl.h" // 执行器模块（水泵/风扇/舵机）对外接口
@@ -14,10 +13,9 @@
 WifiNet net;
 HostLink link;        // F8266-2 从机 → esp32-1 主机(NET_HOST_PORT) 的 TCP 链路
 OledCtrl oled;        // 智慧农场状态可视化层（信息行由各子系统写入）
-Sht30Sensor sht30;    // 子系统①：温湿度采集（I2C 0x44，与 OLED 共线）
-Bh1750Sensor gy30;    // 子系统②：光照采集（GY-30/BH1750，I2C 0x23，共线）
-SoilSensor soil;      // 子系统③：土壤湿度监测（AO→分压→A0，3V3 供电，中值滤波+滞回阈值）
-Sgp30Sensor sgp30;    // 子系统④：空气质量 eCO₂/TVOC（SGP30，I2C 0x58，共线）
+Gy39Sensor gy39;      // 子系统①：气象二合一（GY-39，I2C 0x5B 共线：温湿度/气压/光照，替代 SHT30+GY-30）
+SoilSensor soil;      // 子系统②：土壤湿度监测（AO→分压→A0，3V3 供电，中值滤波+滞回阈值）
+Sgp30Sensor sgp30;    // 子系统③：空气质量 eCO₂/TVOC（SGP30，I2C 0x58，共线）
 ActuatorCtrl act;     // 执行实体：水泵（GPIO0）/风扇正反转（GPIO13/2）/舵机（GPIO12）
 
 // ===================== 业务命令扩展口 =====================
@@ -46,11 +44,13 @@ static void reportSensors() {
   if (!link.isOnline()) return;   // 未连上主机不上报
 
   String j = F("{\"t\":");
-  j += sht30.hasData() ? String(sht30.getTempC(), 1) : F("null");
+  j += gy39.hasData() ? String(gy39.getTempC(), 1) : F("null");
   j += F(",\"h\":");
-  j += sht30.hasData() ? String(sht30.getHumRH(), 1) : F("null");
+  j += gy39.hasData() ? String(gy39.getHumRH(), 1) : F("null");
+  j += F(",\"press\":");
+  j += gy39.hasData() ? String((unsigned)(gy39.getPressPa() / 100UL)) : F("null");  // hPa
   j += F(",\"lux\":");
-  j += gy30.hasData() ? String((int)gy30.getLux()) : F("null");
+  j += gy39.hasData() ? String((unsigned)gy39.getLux()) : F("null");
   j += F(",\"soil\":");
   j += soil.isMoist() ? '1' : '0';           // 土壤数字量始终有值（1=湿润 0=过干）
   j += F(",\"co2\":");
@@ -87,16 +87,13 @@ void setup() {
     Serial.println(F("[main] OLED 初始化失败：检查 I2C 接线/地址"));
   }
 
-  // 子系统①：SHT30 温湿度传感器（同一 I2C 总线；未检测到不阻塞启动，handle 内自愈重扫）
-  sht30.begin();
+  // 子系统①：GY-39 气象二合一（同一 I2C 总线；未检测到不阻塞启动，handle 内自愈重扫）
+  gy39.begin();
 
-  // 子系统②：GY-30(BH1750) 光照传感器（同一 I2C 总线；同上自愈策略）
-  gy30.begin();
-
-  // 子系统③：土壤湿度传感器（AO 模拟量经分压→A0；低=湿润适宜，高=过干，中值滤波+滞回）
+  // 子系统②：土壤湿度传感器（AO 模拟量经分压→A0；低=湿润适宜，高=过干，中值滤波+滞回）
   soil.begin();
 
-  // 子系统④：SGP30 空气质量传感器（同一 I2C 总线；eCO₂ 为 TVOC 推算等效值，15s 暖机）
+  // 子系统③：SGP30 空气质量传感器（同一 I2C 总线；eCO₂ 为 TVOC 推算等效值，15s 暖机）
   sgp30.begin();
 
   // 执行实体：水泵/风扇/舵机（进入安全态：泵关/风扇停/舵机 0°=关棚；控制入口接主机命令/自动逻辑）
@@ -120,10 +117,9 @@ void loop() {
   net.handle();    // 网络周期维护（断线自愈）
   link.handle();   // 主机链路周期维护（连接/收发/断线重连）
   oled.handle();   // OLED 周期维护（预留整页状态渲染）
-  sht30.handle();  // 子系统①：温湿度周期采集（健康判定 + 热插拔重扫）
-  gy30.handle();   // 子系统②：光照周期采集（健康判定 + 热插拔重扫）
-  soil.handle();   // 子系统③：土壤湿度周期采集（中值滤波 + 滞回阈值判定）
-  sgp30.handle();  // 子系统④：空气质量周期采集（暖机/健康/热插拔重扫）
+  gy39.handle();   // 子系统①：气象二合一周期采集（温湿度/气压/光照 + 健康判定 + 热插拔重扫）
+  soil.handle();   // 子系统②：土壤湿度周期采集（中值滤波 + 滞回阈值判定）
+  sgp30.handle();  // 子系统③：空气质量周期采集（暖机/健康/热插拔重扫）
   act.handle();    // 执行实体周期维护（预留：缓动/超时保护）
 
   // ★断连保护 + 重连补报：与主机连接断开（TCP 断 / WiFi 断）即全停执行器；
@@ -149,26 +145,27 @@ void loop() {
   if (millis() - lastUiMs >= 1000) {
     lastUiMs = millis();
 
-    // 行 0：SHT30 温湿度
-    if (!sht30.isOk()) {
-      oled.setInfoLine(0, F("SHT30 ERR"));
-    } else if (!sht30.hasData()) {
-      oled.setInfoLine(0, F("SHT30 ..."));    // 已检测到，等待首次读数
+    // 行 0：GY-39 温湿度（气象二合一之一）
+    if (!gy39.isOk()) {
+      oled.setInfoLine(0, F("GY39 ERR"));
+    } else if (!gy39.hasData()) {
+      oled.setInfoLine(0, F("GY39 ..."));     // 已检测到，等待首次读数
     } else {
       char line[24];
       snprintf(line, sizeof(line), "T:%.1fC H:%.0f%%",
-               sht30.getTempC(), sht30.getHumRH());
+               gy39.getTempC(), gy39.getHumRH());
       oled.setInfoLine(0, line);
     }
 
-    // 行 1：GY-30 光照
-    if (!gy30.isOk()) {
-      oled.setInfoLine(1, F("GY30 ERR"));
-    } else if (!gy30.hasData()) {
-      oled.setInfoLine(1, F("GY30 ..."));     // 已检测到，等待首次读数
+    // 行 1：GY-39 光照 + 气压（气象二合一之二）
+    if (!gy39.isOk()) {
+      oled.setInfoLine(1, F("GY39 ERR"));
+    } else if (!gy39.hasData()) {
+      oled.setInfoLine(1, F("GY39 ..."));     // 已检测到，等待首次读数
     } else {
       char line[24];
-      snprintf(line, sizeof(line), "L:%.0flux", gy30.getLux());
+      snprintf(line, sizeof(line), "L:%.0flux P:%luh",
+               gy39.getLux(), (unsigned long)(gy39.getPressPa() / 100UL));
       oled.setInfoLine(1, line);
     }
 

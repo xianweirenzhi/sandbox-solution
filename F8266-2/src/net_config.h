@@ -42,6 +42,7 @@
 #define NET_REPORT_MS 2000UL
 
 // ===================== 板载外设引脚（集中在此修改）=====================
-// I2C 总线：OLED（0x3C）与 SHT30 温湿度（0x44）共用一条，接板上 SDA/SCL 排针。
+// I2C 总线：OLED（0x3C）、GY-39 气象二合一（0x5B）、SGP30 空气质量（0x58）共用一条，
+// 接板上 SDA/SCL 排针。
 #define PERIPH_I2C_SDA 4   // 板上 SDA（GPIO4）
 #define PERIPH_I2C_SCL 5   // 板上 SCL（GPIO5）

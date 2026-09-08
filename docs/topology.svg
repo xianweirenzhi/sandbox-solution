@@ -145,7 +145,7 @@
     <circle class="dot-wait" cx="313" cy="576" r="4" />
     <text class="t-chip" x="324" y="580">待上板</text>
     <text class="t-small" x="334" y="600" text-anchor="middle">克隆 F8266-1 · 已差异化</text>
-    <text class="t-small" x="334" y="616" text-anchor="middle">无 MQ-2 · 土壤 AO 模拟量</text>
+    <text class="t-small" x="334" y="616" text-anchor="middle">GY-39 · 土壤 AO · 无 MQ-2</text>
     <text class="t-small" x="334" y="632" text-anchor="middle">端口 8001 · 编译通过</text>
   </g>
   <g>

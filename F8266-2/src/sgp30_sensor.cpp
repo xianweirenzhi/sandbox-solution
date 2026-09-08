@@ -55,7 +55,7 @@ uint32_t Sgp30Sensor::getTvocPpb() const {
 }
 
 bool Sgp30Sensor::begin() {
-  // 与 OLED/SHT30/GY-30 共用同一条 I2C；同参数重复 begin 无害
+  // 与 OLED/GY-39 共用同一条 I2C；同参数重复 begin 无害
   Wire.begin(PERIPH_I2C_SDA, PERIPH_I2C_SCL);
   _p->present = _p->sgp.begin();
   _p->startMs = millis();

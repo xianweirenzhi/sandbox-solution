@@ -7,7 +7,7 @@
 #include "oled_ctrl.h"
 
 // ===================== 显示参数（改地址只动这里）=====================
-// I2C 引脚集中定义在 net_config.h（与 SHT30/GY-30/SGP30 共线）；0.96" SSD1306 常见地址 0x3C（部分模组 0x3D）
+// I2C 引脚集中定义在 net_config.h（与 GY-39/SGP30 共线）；0.96" SSD1306 常见地址 0x3C（部分模组 0x3D）
 #define OLED_I2C_ADDR  0x3C
 #define OLED_WIDTH     128
 #define OLED_HEIGHT    64
