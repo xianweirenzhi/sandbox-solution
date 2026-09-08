@@ -15,6 +15,14 @@ struct PortSnapshot {
   uint32_t txCount = 0;          // 累计发送次数
   String   log[PORT_LOG_LINES];  // 最近收发记录(按时间序)
   uint8_t  logLen = 0;
+  // 从机上报的最新传感数据(JSON 帧解析结果;NaN/负值表示无数据)
+  bool     hasData = false;      // 是否收到过传感数据帧
+  float    t = 0.0f;             // 温度 ℃(NaN=无)
+  float    h = 0.0f;             // 湿度 %(NaN=无)
+  float    lux = 0.0f;           // 光照 lx(NaN=无)
+  int8_t   soil = -1;            // 土壤 -1=无 0=干 1=湿
+  float    co2 = 0.0f;           // eCO₂ ppm(NaN=无)
+  float    tvoc = 0.0f;          // TVOC ppb(NaN=无)
 };
 
 // 从机通信服务:开启 PORT_COUNT 个连续 TCP 端口,提供收发与状态查询

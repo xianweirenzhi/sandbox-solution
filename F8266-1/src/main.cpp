@@ -24,11 +24,48 @@ ActuatorCtrl act;     // 执行实体：水泵（GPIO0）/风扇正反转（GPIO
 
 // ===================== 业务命令扩展口 =====================
 // 收到主机下发命令【内容】时回调这里（帧头 @ / 帧尾 / 已由 host_link 剥离）。
-// ★ 命令详细内容留待在此扩展：解析 cmd 并执行对应业务；如需回包请 link.send("...")。
+// 命令词表（主机网页按键 / 控制台下发，见 esp32-1 与 ARCHITECTURE 协议）：
+//   PUMP ON / PUMP OFF        水泵开关
+//   FAN FWD / FAN REV / FAN STOP  风扇正转/反转/停
+//   SERVO <0~180>             舵机角度
 void onHostCommand(const String &cmd) {
-  Serial.print(F("[main] 收到主机命令: "));
+  if (cmd == F("PUMP ON")) { act.pumpOn(); return; }
+  if (cmd == F("PUMP OFF")) { act.pumpOff(); return; }
+  if (cmd == F("FAN FWD")) { act.fanForward(); return; }
+  if (cmd == F("FAN REV")) { act.fanReverse(); return; }
+  if (cmd == F("FAN STOP")) { act.fanStop(); return; }
+  if (cmd.startsWith(F("SERVO "))) {
+    int deg = cmd.substring(6).toInt();
+    if (deg >= 0 && deg <= 180) { act.servoSet(deg); return; }
+  }
+  Serial.print(F("[main] 未知命令: "));
   Serial.println(cmd);
-  // TODO: 命令解析与业务执行（如开灯/关灯、上报状态等）
+}
+
+// ===================== 传感数据上报 =====================
+// 打包传感数据为 JSON（不含 MQ-2：该传感器仅本机使用，不上报主机），
+// 未就绪/故障的传感器字段填 null，主机端据此显示 "--"。
+static void reportSensors() {
+  if (!link.isOnline()) return;   // 未连上主机不上报
+
+  String j = F("{\"t\":");
+  j += sht30.hasData() ? String(sht30.getTempC(), 1) : F("null");
+  j += F(",\"h\":");
+  j += sht30.hasData() ? String(sht30.getHumRH(), 1) : F("null");
+  j += F(",\"lux\":");
+  j += gy30.hasData() ? String((int)gy30.getLux()) : F("null");
+  j += F(",\"soil\":");
+  j += soil.isMoist() ? '1' : '0';           // 土壤数字量始终有值（1=湿润 0=过干）
+  j += F(",\"co2\":");
+  j += sgp30.hasData() ? String((unsigned)sgp30.getEco2Ppm()) : F("null");
+  j += F(",\"tvoc\":");
+  j += sgp30.hasData() ? String((unsigned)sgp30.getTvocPpb()) : F("null");
+  j += '}';
+
+  if (link.send(j)) {
+    Serial.print(F("[main] 上报: "));
+    Serial.println(j);
+  }
 }
 
 void setup() {
@@ -88,6 +125,13 @@ void loop() {
   soil.handle();   // 子系统④：土壤湿度监测（1s 环境消抖）
   sgp30.handle();  // 子系统⑤：空气质量周期采集（暖机/健康/热插拔重扫）
   act.handle();    // 执行实体周期维护（预留：缓动/超时保护）
+
+  // 传感数据周期上报主机（每 NET_REPORT_MS 一次；不含 MQ-2）
+  static uint32_t lastReportMs = 0;
+  if (millis() - lastReportMs >= NET_REPORT_MS) {
+    lastReportMs = millis();
+    reportSensors();
+  }
 
   // 子系统状态上屏（信息区每子系统一行；后续子系统在此追加各行）
   static uint32_t lastUiMs = 0;

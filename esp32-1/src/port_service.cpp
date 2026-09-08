@@ -1,5 +1,6 @@
 #include "port_service.h"
 
+#include <ArduinoJson.h>
 #include <errno.h>
 #include <lwip/sockets.h>   // recv / MSG_DONTWAIT / EWOULDBLOCK
 
@@ -18,6 +19,10 @@ struct PortCtx {
   uint32_t    rxCount = 0, txCount = 0;
   String      slave;                       // 已上线的从机名(F8266-x)
   bool        online = false;
+  // 从机上报的最新传感数据
+  bool        hasData = false;
+  float       t = NAN, h = NAN, lux = NAN, co2 = NAN, tvoc = NAN;
+  int8_t      soil = -1;
 };
 
 static PortCtx s_ports[PORT_COUNT];
@@ -55,6 +60,22 @@ static void parseOnline(PortCtx &p, const String &cmd) {
   }
 }
 
+// 解析从机传感数据 JSON 帧(如 {"t":25.3,"h":56.0,...})，null/缺失字段置 NaN
+static void parseData(PortCtx &p, const String &cmd) {
+  JsonDocument doc;
+  if (deserializeJson(doc, cmd)) return;   // 解析失败(非数据帧/损坏)忽略
+  p.hasData = true;
+  p.t    = doc["t"].is<float>()    ? doc["t"].as<float>()    : NAN;
+  p.h    = doc["h"].is<float>()    ? doc["h"].as<float>()    : NAN;
+  p.lux  = doc["lux"].is<float>()  ? doc["lux"].as<float>()  : NAN;
+  p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;
+  p.co2  = doc["co2"].is<float>()  ? doc["co2"].as<float>()  : NAN;
+  p.tvoc = doc["tvoc"].is<float>() ? doc["tvoc"].as<float>() : NAN;
+  // 数据帧不逐条刷日志(高频 2s 一次会淹没日志)；仅在首条打印一次
+  if (!p.hasData) pushLog(p, timeStamp() + " ⚙ 开始接收传感数据");
+  p.hasData = true;
+}
+
 // 端口内无连接时,若曾上线则标记离线
 static void markOfflineIfEmpty(PortCtx &p) {
   if (countClients(p) == 0 && p.online) {
@@ -72,6 +93,10 @@ static void handleCommand(PortCtx &p) {
   cmd.trim();
   if (!cmd.length()) return;
   p.rxCount++;
+  if (cmd[0] == '{') {          // JSON 数据帧：解析存储，不逐条刷日志(高频 2s)
+    parseData(p, cmd);
+    return;
+  }
   parseOnline(p, cmd);
   pushLog(p, timeStamp() + " ← @" + cmd + "/");
 }
@@ -208,6 +233,9 @@ PortSnapshot snapshot(uint8_t idx) {
   s.slave = p.slave;
   s.rxCount = p.rxCount;
   s.txCount = p.txCount;
+  s.hasData = p.hasData;
+  s.t = p.t; s.h = p.h; s.lux = p.lux; s.soil = p.soil;
+  s.co2 = p.co2; s.tvoc = p.tvoc;
   for (uint8_t i = 0; i < p.logLen; i++) {  // 环形缓冲按时间序导出
     uint8_t k = (p.logHead + PORT_LOG_LINES - p.logLen + i) % PORT_LOG_LINES;
     s.log[i] = p.log[k];

@@ -14,54 +14,79 @@ namespace web_ui {
 static WebServer server(WEB_PORT);
 
 /* ---------------- 首页 HTML(存于 Flash,节省 RAM) ---------------- */
-// 布局:上方为精简设备状态卡,下方为 2×3 六个从机通信端口卡(222 布局)
+// 布局:设备状态卡 + 传感数据卡(进度条) + 执行器控制卡;原收发窗口收进二级日志页
 static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32-S3 主机控制台</title>
+<title>智慧农场控制台</title>
 <style>
 *{box-sizing:border-box}
 body{font-family:"Microsoft YaHei",system-ui,sans-serif;background:#f2f3f5;color:#333;margin:0;padding:12px}
 .wrap{max-width:760px;margin:0 auto}
 h1{font-size:18px;text-align:center;margin:6px 0 12px}
-h2{font-size:14px;color:#666;margin:2px 0 8px;font-weight:600}
+h2{font-size:14px;color:#666;margin:0 0 8px;font-weight:600}
 .card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:12px 14px;margin-bottom:12px}
+.cardhead{display:flex;align-items:center;justify-content:space-between}
 .badge{display:flex;align-items:center;justify-content:space-between;padding:2px 0 8px;font-size:13px;font-weight:600}
 .dot{width:9px;height:9px;border-radius:50%;background:#ccc;display:inline-block;margin-right:6px}
 .on .dot{background:#2ecc71}
 .ap .dot{background:#f39c12}
 .off .dot{background:#e74c3c}
-/* 设备状态精简卡:两列键值网格 */
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px;font-size:12px}
 .item{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px dashed #eee;min-width:0}
 .item .k{color:#999;flex-shrink:0}
 .item .v{font-weight:600;text-align:right;word-break:break-all}
-/* 从机端口卡:2 列 x 3 行 */
-.ports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.pcard{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:10px 12px;display:flex;flex-direction:column}
+/* 传感数据卡:3 列 */
+.sensors{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.scard{background:#f7f8fa;border:1px solid #eee;border-radius:8px;padding:10px;text-align:center}
+.sname{font-size:12px;color:#888;margin-bottom:4px}
+.sval{font-size:20px;font-weight:700;color:#333;margin-bottom:6px}
+.sval small{font-size:11px;font-weight:400;color:#999}
+.bar{height:6px;background:#e8e9eb;border-radius:3px;overflow:hidden}
+.barfill{height:100%;width:0;background:#3498db;border-radius:3px;transition:width .4s}
+.barfill.warn{background:#f39c12}
+.scard.ok .barfill{background:#2ecc71}
+/* 执行器控制 */
+.actrow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px dashed #eee;font-size:13px}
+.actrow:last-child{border-bottom:0}
+.actrow .lbl{width:56px;color:#666;flex-shrink:0}
+.actrow button{border:0;border-radius:6px;background:#3498db;color:#fff;padding:7px 14px;font-size:13px;cursor:pointer}
+.actrow button:active{background:#217db9}
+.actrow button.green{background:#2ecc71}
+.actrow button.red{background:#e74c3c}
+.actrow button.gray{background:#95a5a6}
+.actrow input[type=range]{flex:1;min-width:0}
+.servoval{width:40px;text-align:center;font-weight:700;font-size:14px}
+/* 日志二级页(全屏覆盖) */
+.logpage{position:fixed;inset:0;background:#fff;z-index:10;overflow-y:auto;display:none;padding:12px}
+.logpage.show{display:block}
+.loghead{display:flex;align-items:center;justify-content:space-between;max-width:760px;margin:0 auto 10px}
+.loghead button{border:0;border-radius:6px;background:#e74c3c;color:#fff;padding:7px 16px;font-size:13px;cursor:pointer}
+.ports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-width:760px;margin:0 auto}
+.pcard{background:#fff;border:1px solid #eee;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:10px 12px;display:flex;flex-direction:column}
 .phead{display:flex;align-items:center;gap:6px;font-size:13px;padding-bottom:6px}
 .pdot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0}
 .pdot.live{background:#2ecc71}
 .pdot.link{background:#f39c12}
 .pinfo{margin-left:auto;color:#888;font-size:11px;font-weight:600}
 .pinfo.on{color:#27ae60}
-.plog{flex:1;min-height:90px;max-height:130px;overflow-y:auto;background:#f7f8fa;border:1px solid #eee;border-radius:6px;padding:6px;margin:0;font:11px/1.5 Consolas,monospace;white-space:pre-wrap;word-break:break-all;color:#555}
+.plog{flex:1;min-height:120px;overflow-y:auto;background:#f7f8fa;border:1px solid #eee;border-radius:6px;padding:6px;margin:0;font:11px/1.5 Consolas,monospace;white-space:pre-wrap;word-break:break-all;color:#555}
 .psend{display:flex;gap:6px;margin-top:8px}
 .psend input{flex:1;min-width:0;border:1px solid #ddd;border-radius:6px;padding:6px 8px;font-size:12px}
 .psend button{border:0;border-radius:6px;background:#3498db;color:#fff;padding:6px 14px;font-size:12px;cursor:pointer}
-.psend button:active{background:#217db9}
 .pstat{font-size:11px;color:#aaa;margin-top:6px;text-align:right}
+#logBtn{display:block;width:100%;border:0;border-radius:10px;background:#34495e;color:#fff;padding:10px;font-size:14px;cursor:pointer;margin-bottom:4px}
 footer{text-align:center;color:#aaa;font-size:11px;margin:4px 0}
 </style>
 </head>
 <body>
 <div class="wrap">
-<h1>ESP32-S3 主机控制台</h1>
+<h1>智慧农场控制台</h1>
 
-<!-- 设备状态(原状态页内容精简收录于此卡) -->
+<!-- 设备状态卡 -->
 <div class="card">
   <div class="badge" id="stateBox">
     <span><span class="dot"></span><span id="stateText">连接中…</span></span>
@@ -74,24 +99,40 @@ footer{text-align:center;color:#aaa;font-size:11px;margin:4px 0}
     <div class="item"><span class="k">信号</span><span class="v" id="rssi">--</span></div>
     <div class="item"><span class="k">网关</span><span class="v" id="gw">--</span></div>
     <div class="item"><span class="k">信道</span><span class="v" id="ch">--</span></div>
-    <div class="item"><span class="k">掩码</span><span class="v" id="mask">--</span></div>
-    <div class="item"><span class="k">MAC</span><span class="v" id="mac">--</span></div>
     <div class="item"><span class="k">主机名</span><span class="v" id="hostname">--</span></div>
     <div class="item"><span class="k">运行时间</span><span class="v" id="uptime">--</span></div>
-    <div class="item"><span class="k">内存</span><span class="v" id="heap">--</span></div>
-    <div class="item"><span class="k">PSRAM</span><span class="v" id="psram">--</span></div>
-    <div class="item"><span class="k">Flash</span><span class="v" id="flash">--</span></div>
-    <div class="item"><span class="k">芯片</span><span class="v" id="chip">--</span></div>
-    <div class="item"><span class="k">CPU</span><span class="v" id="cpu">--</span></div>
-    <div class="item"><span class="k">温度</span><span class="v" id="temp">--</span></div>
-    <div class="item"><span class="k">SDK</span><span class="v" id="sdk">--</span></div>
   </div>
 </div>
 
-<h2>从机通信端口</h2>
-<div class="ports" id="ports"></div>
+<!-- 传感数据卡 -->
+<div class="card">
+  <div class="cardhead"><h2>传感数据（F8266-1）</h2><span id="dataState" style="font-size:11px;color:#999">等待从机…</span></div>
+  <div class="sensors">
+    <div class="scard"><div class="sname">温度</div><div class="sval" id="s_t">--<small>℃</small></div><div class="bar"><div class="barfill" id="b_t"></div></div></div>
+    <div class="scard"><div class="sname">湿度</div><div class="sval" id="s_h">--<small>%</small></div><div class="bar"><div class="barfill" id="b_h"></div></div></div>
+    <div class="scard"><div class="sname">光照</div><div class="sval" id="s_lux">--<small>lx</small></div><div class="bar"><div class="barfill" id="b_lux"></div></div></div>
+    <div class="scard"><div class="sname">土壤</div><div class="sval" id="s_soil">--</div><div class="bar"><div class="barfill" id="b_soil"></div></div></div>
+    <div class="scard"><div class="sname">CO₂</div><div class="sval" id="s_co2">--<small>ppm</small></div><div class="bar"><div class="barfill" id="b_co2"></div></div></div>
+    <div class="scard"><div class="sname">TVOC</div><div class="sval" id="s_tvoc">--<small>ppb</small></div><div class="bar"><div class="barfill" id="b_tvoc"></div></div></div>
+  </div>
+</div>
 
-<footer>状态每 2 秒 / 端口每 1.5 秒自动刷新</footer>
+<!-- 执行器控制 -->
+<div class="card">
+  <h2>执行器控制</h2>
+  <div class="actrow"><span class="lbl">水泵</span><button class="green" onclick="act('PUMP ON')">开</button><button class="gray" onclick="act('PUMP OFF')">关</button></div>
+  <div class="actrow"><span class="lbl">风扇</span><button class="green" onclick="act('FAN FWD')">正转</button><button class="red" onclick="act('FAN REV')">反转</button><button class="gray" onclick="act('FAN STOP')">停</button></div>
+  <div class="actrow"><span class="lbl">舵机</span><input type="range" id="servo" min="0" max="180" value="90" oninput="document.getElementById('servoVal').textContent=this.value" onchange="act('SERVO '+this.value)"><span class="servoval" id="servoVal">90</span>°</div>
+</div>
+
+<button id="logBtn" onclick="document.getElementById('logPage').classList.add('show')">📋 通信日志</button>
+<footer>状态 2 秒 / 数据 1.5 秒自动刷新</footer>
+</div>
+
+<!-- 日志二级页(原 2×3 收发窗口) -->
+<div class="logpage" id="logPage">
+  <div class="loghead"><h2>从机通信日志</h2><button onclick="document.getElementById('logPage').classList.remove('show')">✕ 关闭</button></div>
+  <div class="ports" id="ports"></div>
 </div>
 
 <script>
@@ -112,18 +153,46 @@ async function refreshStatus(){
     q('ssid',d.ssid);q('ip',d.ip);
     q('rssi',d.mode==='STA'?d.rssi+' dBm':'—');
     q('gw',d.gw);q('ch',d.mode==='STA'?d.ch:'—');
-    q('mask',d.mask);q('mac',d.mac);q('hostname',d.host);q('uptime',d.uptime);
-    q('heap',fmtKB(d.heapFree)+' / '+fmtKB(d.heapSize));
-    q('psram',d.psramSize>0?fmtKB(d.psramFree)+' / '+fmtKB(d.psramSize):'无');
-    q('flash',d.flashMB+'MB @ '+d.flashMHz+'MHz');
-    q('chip',d.chip);q('cpu',d.cpuMHz+' MHz');q('temp',d.tempC+' ℃');q('sdk',d.sdk);
+    q('hostname',d.host);q('uptime',d.uptime);
   }catch(e){
     q('stateText','设备无响应');
     document.getElementById('stateBox').className='badge off';
   }
 }
 
-/* ---------- 从机通信端口 ---------- */
+/* ---------- 传感数据(取端口 0 = F8266-1) ---------- */
+function setSensor(key,val,unit,pct,warn){
+  q('s_'+key,val===null?'--':val+'<small>'+unit+'</small>');
+  const bar=document.getElementById('b_'+key);
+  bar.style.width=(pct*100)+'%';
+  bar.className='barfill'+(warn?' warn':'');
+}
+function refreshSensors(){
+  if(!portsData||!portsData[0])return;
+  const d=portsData[0];
+  const ds=document.getElementById('dataState');
+  if(!d.hasData){ds.textContent='等待数据…';return}
+  ds.textContent=d.online?d.slave+' 在线':'从机已离线';
+  setSensor('t',d.t,'℃',d.t===null?0:Math.min(d.t/50,1),d.t!==null&&d.t>35);
+  setSensor('h',d.h,'%',d.h===null?0:Math.min(d.h/100,1),false);
+  setSensor('lux',d.lux,'lx',d.lux===null?0:Math.min(d.lux/2000,1),false);
+  if(d.soil===null){q('s_soil','--');document.getElementById('b_soil').style.width='0'}
+  else if(d.soil===1){q('s_soil','湿润');document.getElementById('b_soil').style.width='100%';document.getElementById('b_soil').className='barfill'}
+  else{q('s_soil','干燥');document.getElementById('b_soil').style.width='20%';document.getElementById('b_soil').className='barfill warn'}
+  setSensor('co2',d.co2,'ppm',d.co2===null?0:Math.min((d.co2-400)/1600,1),d.co2!==null&&d.co2>1200);
+  setSensor('tvoc',d.tvoc,'ppb',d.tvoc===null?0:Math.min(d.tvoc/1000,1),d.tvoc!==null&&d.tvoc>500);
+}
+
+/* ---------- 执行器控制(发命令到端口 8000) ---------- */
+async function act(cmd){
+  try{
+    const body=new URLSearchParams({port:'8000',text:cmd});
+    const r=await(await fetch('/api/send',{method:'POST',body:body})).json();
+    if(!r.ok)alert('控制失败：'+(r.error||'从机离线'));
+  }catch(e){alert('控制失败：网络错误')}
+}
+
+/* ---------- 从机通信端口(日志二级页内) ---------- */
 function buildCards(list){
   document.getElementById('ports').innerHTML=list.map((d,i)=>
     '<div class="pcard">'+
@@ -154,6 +223,7 @@ async function refreshPorts(){
       log.scrollTop=log.scrollHeight;
       q('ps'+i,'收 '+d.rx+' / 发 '+d.tx+(d.clients>0?' · 连接 '+d.clients:''));
     });
+    refreshSensors();
   }catch(e){}
 }
 async function sendMsg(i){
@@ -186,6 +256,12 @@ static String jsonEsc(const String &s) {
     else r += c;
   }
   return r;
+}
+
+// 数字或 null(传感字段 NaN 表示无数据)
+static String numOrNull(float v, int dec = 1) {
+  if (isnan(v)) return "null";
+  return String(v, dec);
 }
 
 /* ---------------- HTTP 接口 ---------------- */
@@ -234,6 +310,14 @@ static void handlePorts() {
     j += ",\"slave\":\"" + jsonEsc(s.slave) + "\"";
     j += ",\"rx\":" + String(s.rxCount);
     j += ",\"tx\":" + String(s.txCount);
+    // 传感数据(无数据字段为 null)
+    j += ",\"hasData\":" + String(s.hasData ? "true" : "false");
+    j += ",\"t\":" + numOrNull(s.t);
+    j += ",\"h\":" + numOrNull(s.h);
+    j += ",\"lux\":" + (isnan(s.lux) ? String("null") : String((int)s.lux));
+    j += ",\"soil\":" + (s.soil < 0 ? String("null") : String(s.soil));
+    j += ",\"co2\":" + (isnan(s.co2) ? String("null") : String((int)s.co2));
+    j += ",\"tvoc\":" + (isnan(s.tvoc) ? String("null") : String((int)s.tvoc));
     j += ",\"log\":[";
     for (uint8_t k = 0; k < s.logLen; k++) {
       if (k) j += ",";
