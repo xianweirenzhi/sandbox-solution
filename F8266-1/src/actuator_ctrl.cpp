@@ -4,14 +4,16 @@
 #include "actuator_ctrl.h"
 
 // ===================== 引脚与极性参数（改接线只动这里）=====================
-#define PUMP_PIN      0     // 水泵驱动 IN（低电平开启）；★GPIO0 为烧录脚，烧录/上传固件时被拉低→水泵会误开喷水，烧录前务必断水断电（用户已知情接受）
+#define PUMP_PIN      0     // 水泵驱动 IN（高电平开泵）；GPIO0 烧录时拉低=泵关（安全）；上电瞬间内部上拉=高会短暂开启几十 ms，电机响应慢通常无感
 #define FAN_FWD_PIN   13    // 风扇正转驱动 IN（低电平触发）
 #define FAN_REV_PIN   2     // 风扇反转驱动 IN（低电平触发；GPIO2 为 boot 脚上电需高，低触发设备上电默认关=安全）
 #define SERVO_PIN     12    // 舵机信号线（50Hz PWM）
 
-// 低触发语义：LOW=开启/触发，HIGH=关闭/停止（上拉默认 HIGH 即安全态）
-#define TRIG_ON   LOW
-#define TRIG_OFF  HIGH
+// 触发极性（水泵高触发、风扇低触发，各自独立）：
+#define PUMP_ON    HIGH   // 水泵：高电平开泵
+#define PUMP_OFF   LOW    // 水泵：低电平关泵（GPIO0 烧录拉低=关，安全）
+#define FAN_ON     LOW    // 风扇：低电平触发（开）
+#define FAN_OFF    HIGH   // 风扇：高电平停止（安全态）
 
 #define SERVO_CENTER_DEG  90    // 上电/初始化舵机中位角
 
@@ -26,11 +28,12 @@ struct ActuatorCtrl::Impl {
 
 // ===================== 内部小工具 =====================
 
-// 拉高一路驱动使其关闭（安全态写法：先写 HIGH 再改 OUTPUT，上电即无毛刺）
-static void pinInitSafe(uint8_t pin) {
-  digitalWrite(pin, TRIG_OFF);   // 先置关闭电平
+// 置一路驱动为关闭电平（安全态写法：先写关闭电平再切 OUTPUT，上电/初始化无毛刺）。
+// offLevel 取该路驱动的关闭电平：水泵=PUMP_OFF(LOW)、风扇=FAN_OFF(HIGH)。
+static void pinInitSafe(uint8_t pin, int offLevel) {
+  digitalWrite(pin, offLevel);   // 先置关闭电平
   pinMode(pin, OUTPUT);          // 再切输出（切换瞬间即为关，不会误触发）
-  digitalWrite(pin, TRIG_OFF);
+  digitalWrite(pin, offLevel);
 }
 
 // ===================== 公开接口 =====================
@@ -56,9 +59,9 @@ uint8_t ActuatorCtrl::servoGet() const {
 
 bool ActuatorCtrl::begin() {
   // 1) 水泵/风扇全部进入安全态（关闭）
-  pinInitSafe(PUMP_PIN);
-  pinInitSafe(FAN_FWD_PIN);
-  pinInitSafe(FAN_REV_PIN);
+  pinInitSafe(PUMP_PIN, PUMP_OFF);
+  pinInitSafe(FAN_FWD_PIN, FAN_OFF);
+  pinInitSafe(FAN_REV_PIN, FAN_OFF);
   _p->pumpOn = false;
   _p->fan = 0;
 
@@ -76,39 +79,39 @@ void ActuatorCtrl::handle() {
   // 预留：舵机缓动、水泵超时自动停等安全逻辑；当前无周期任务。
 }
 
-// ---- 水泵 ----
+// ---- 水泵（高触发：高=开泵） ----
 
 void ActuatorCtrl::pumpOn() {
-  digitalWrite(PUMP_PIN, TRIG_ON);
+  digitalWrite(PUMP_PIN, PUMP_ON);
   _p->pumpOn = true;
   Serial.println(F("[act] 水泵 开"));
 }
 
 void ActuatorCtrl::pumpOff() {
-  digitalWrite(PUMP_PIN, TRIG_OFF);
+  digitalWrite(PUMP_PIN, PUMP_OFF);
   _p->pumpOn = false;
   Serial.println(F("[act] 水泵 关"));
 }
 
-// ---- 风扇（正反转软件互锁：开任一路前先断另一路，防驱动级直通短路） ----
+// ---- 风扇（低触发：低=开；正反转软件互锁：开任一路前先断另一路，防驱动级直通短路） ----
 
 void ActuatorCtrl::fanForward() {
-  digitalWrite(FAN_REV_PIN, TRIG_OFF);   // 互锁：先确保反转断开
-  digitalWrite(FAN_FWD_PIN, TRIG_ON);
+  digitalWrite(FAN_REV_PIN, FAN_OFF);   // 互锁：先确保反转断开
+  digitalWrite(FAN_FWD_PIN, FAN_ON);
   if (_p->fan != 1) Serial.println(F("[act] 风扇 正转"));
   _p->fan = 1;
 }
 
 void ActuatorCtrl::fanReverse() {
-  digitalWrite(FAN_FWD_PIN, TRIG_OFF);   // 互锁：先确保正转断开
-  digitalWrite(FAN_REV_PIN, TRIG_ON);
+  digitalWrite(FAN_FWD_PIN, FAN_OFF);   // 互锁：先确保正转断开
+  digitalWrite(FAN_REV_PIN, FAN_ON);
   if (_p->fan != 2) Serial.println(F("[act] 风扇 反转"));
   _p->fan = 2;
 }
 
 void ActuatorCtrl::fanStop() {
-  digitalWrite(FAN_FWD_PIN, TRIG_OFF);
-  digitalWrite(FAN_REV_PIN, TRIG_OFF);
+  digitalWrite(FAN_FWD_PIN, FAN_OFF);
+  digitalWrite(FAN_REV_PIN, FAN_OFF);
   if (_p->fan != 0) Serial.println(F("[act] 风扇 停"));
   _p->fan = 0;
 }
@@ -126,4 +129,31 @@ void ActuatorCtrl::servoSet(uint8_t deg) {
   Serial.print(F("[act] 舵机 "));
   Serial.print(deg);
   Serial.println(F("°"));
+}
+
+// ---- 上电自检 ----
+
+void ActuatorCtrl::selfTest() {
+  Serial.println(F("[act] ==== 上电自检：逐个激活执行器 0.5s ===="));
+
+  pumpOn();                       // 水泵开 0.5s（高触发）
+  delay(500);
+  pumpOff();
+  delay(200);
+
+  fanForward();                   // 风扇正转 0.5s（低触发）
+  delay(500);
+  fanStop();
+  delay(200);
+
+  fanReverse();                   // 风扇反转 0.5s
+  delay(500);
+  fanStop();
+  delay(200);
+
+  servoSet(180);                  // 舵机摆到 180° 0.5s 后回中
+  delay(500);
+  servoSet(SERVO_CENTER_DEG);
+
+  Serial.println(F("[act] ==== 自检完成，回到安全态（泵关/风扇停/舵机90°）===="));
 }
