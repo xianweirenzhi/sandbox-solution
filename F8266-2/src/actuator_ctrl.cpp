@@ -4,14 +4,13 @@
 #include "actuator_ctrl.h"
 
 // ===================== 引脚与极性参数（改接线只动这里）=====================
-#define PUMP_PIN      0     // 水泵驱动 IN（高电平开泵）；GPIO0 烧录时拉低=泵关（安全）；上电瞬间内部上拉=高会短暂开启几十 ms，电机响应慢通常无感
+#define PUMP_PIN      0     // 水泵驱动 IN（高电平开泵，关=引脚浮空 INPUT，靠驱动模块输入下拉保持关）
 #define FAN_FWD_PIN   13    // 风扇正转驱动 IN（低电平触发）
 #define FAN_REV_PIN   2     // 风扇反转驱动 IN（低电平触发；GPIO2 为 boot 脚上电需高，低触发设备上电默认关=安全）
 #define SERVO_PIN     12    // 舵机信号线（50Hz PWM）
 
-// 触发极性（水泵高触发、风扇低触发，各自独立）：
-#define PUMP_ON    HIGH   // 水泵：高电平开泵
-#define PUMP_OFF   LOW    // 水泵：低电平关泵（GPIO0 烧录拉低=关，安全）
+// 触发极性（水泵高触发·浮空关断、风扇低触发，各自独立）：
+#define PUMP_ON    HIGH   // 水泵：输出高电平开泵；关泵=切回浮空输入（非驱动低电平）
 #define FAN_ON     LOW    // 风扇：低电平触发（开）
 #define FAN_OFF    HIGH   // 风扇：高电平停止（安全态）
 
@@ -59,7 +58,7 @@ uint8_t ActuatorCtrl::servoGet() const {
 
 bool ActuatorCtrl::begin() {
   // 1) 水泵/风扇全部进入安全态（关闭）
-  pinInitSafe(PUMP_PIN, PUMP_OFF);
+  pinMode(PUMP_PIN, INPUT);           // 水泵关=浮空（模块输入下拉保持关）
   pinInitSafe(FAN_FWD_PIN, FAN_OFF);
   pinInitSafe(FAN_REV_PIN, FAN_OFF);
   _p->pumpOn = false;
@@ -79,16 +78,19 @@ void ActuatorCtrl::handle() {
   // 预留：舵机缓动、水泵超时自动停等安全逻辑；当前无周期任务。
 }
 
-// ---- 水泵（高触发：高=开泵） ----
+// ---- 水泵（高触发·浮空关断：开=输出高，关=引脚切回浮空输入） ----
+// ★关断不主动驱动低电平：关态引脚 Hi-Z，由驱动模块输入端下拉保持关；
+//   上电/复位/烧录期间引脚均为输入态，泵默认关（前提：模块输入下拉存在）。
 
 void ActuatorCtrl::pumpOn() {
-  digitalWrite(PUMP_PIN, PUMP_ON);
+  digitalWrite(PUMP_PIN, PUMP_ON);    // 先写高（此时仍输入态，引脚不变）
+  pinMode(PUMP_PIN, OUTPUT);          // 再切输出 → 无毛刺输出高电平开泵
   _p->pumpOn = true;
   Serial.println(F("[act] 水泵 开"));
 }
 
 void ActuatorCtrl::pumpOff() {
-  digitalWrite(PUMP_PIN, PUMP_OFF);
+  pinMode(PUMP_PIN, INPUT);           // 切回浮空输入（Hi-Z）= 关泵
   _p->pumpOn = false;
   Serial.println(F("[act] 水泵 关"));
 }
