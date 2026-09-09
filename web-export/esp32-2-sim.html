@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>智慧农场控制中心</title>
+<style>
+:root{
+  --bg:#f3f5f8;--card:#ffffff;--ink:#1b2733;--mut:#8695a4;--line:#e7ecf1;
+  --acc:#2f7df6;--ok:#21b573;--warn:#f39c12;--bad:#e5533c;--chip:#eef2f7;
+  --bar:#e4e9ef;--sh:0 1px 2px rgba(16,24,40,.05),0 4px 16px rgba(16,24,40,.07)
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0f151c;--card:#18212b;--ink:#e7edf3;--mut:#7f8fa0;--line:#253141;
+  --acc:#4a8dff;--ok:#2fc483;--warn:#f5a623;--bad:#ff6b52;--chip:#202c3a;
+  --bar:#243244;--sh:0 1px 2px rgba(0,0,0,.35),0 4px 16px rgba(0,0,0,.35)
+}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+.top{position:sticky;top:0;z-index:9;background:var(--card);box-shadow:var(--sh)}
+.twrap{max-width:1160px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ttl{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700}
+.sub{font-size:12px;color:var(--mut);font-weight:400}
+.dot{width:9px;height:9px;border-radius:50%;background:#c3ccd6;flex-shrink:0;display:inline-block}
+.dot.on{background:var(--ok)}.dot.ap{background:var(--warn)}.dot.off{background:var(--bad)}
+.tmeta{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut)}
+.pill{background:var(--chip);border-radius:999px;padding:4px 12px;font-weight:600;color:var(--ink);white-space:nowrap}
+.wrap{max-width:1160px;margin:0 auto;padding:14px 16px 26px}
+.sechead{display:flex;align-items:center;gap:10px;margin:4px 2px 10px}
+h2{font-size:15px;margin:0}
+h3{font-size:14px;margin:0}
+.mut{color:var(--mut);font-size:12px}
+.card{background:var(--card);border-radius:14px;box-shadow:var(--sh);padding:14px 16px;margin-bottom:14px}
+.cardhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.secgap{margin-top:20px}
+.ovgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.scard{background:var(--card);border-radius:14px;box-shadow:var(--sh);padding:12px 14px;cursor:pointer;transition:transform .15s}
+.scard:hover{transform:translateY(-2px)}
+.scard.off{opacity:.62}
+.schead{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.schead b{font-size:14px}
+.schead .port{font-size:11px;color:var(--mut)}
+.stchip{margin-left:auto;font-size:11px;font-weight:700;color:var(--mut)}
+.stchip.on{color:var(--ok)}
+.mgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px 12px}
+.mi{min-width:0}
+.mi .k{font-size:11px;color:var(--mut)}
+.mi .v{font-size:14px;font-weight:700;white-space:nowrap}
+.mi .v small{font-size:10px;font-weight:400;color:var(--mut);margin-left:1px}
+.bar{height:4px;background:var(--bar);border-radius:2px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%;width:0;background:var(--acc);border-radius:2px;transition:width .4s}
+.bar i.warn{background:var(--warn)}
+.bar i.ok{background:var(--ok)}
+.achips{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.achip{font-size:11px;background:var(--chip);color:var(--mut);border-radius:999px;padding:2px 9px;font-weight:600}
+.achip.act{background:transparent;color:var(--warn);box-shadow:inset 0 0 0 1px var(--warn)}
+.achip.on{background:transparent;color:var(--ok);box-shadow:inset 0 0 0 1px var(--ok)}
+.afoot{margin-top:8px;font-size:11px;color:var(--mut)}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none;margin-left:auto}
+.tabs::-webkit-scrollbar{display:none}
+.tab{border:0;background:var(--card);color:var(--ink);border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:var(--sh);flex-shrink:0}
+.tab.on{background:var(--acc);color:#fff}
+.tab .dot{width:7px;height:7px}
+.tab.on .dot{background:rgba(255,255,255,.9)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px}
+.big{background:var(--chip);border-radius:12px;padding:12px;min-width:0}
+.big .k{font-size:12px;color:var(--mut)}
+.big .v{font-size:24px;font-weight:800;margin:2px 0 6px;white-space:nowrap}
+.big .v small{font-size:12px;font-weight:400;color:var(--mut)}
+.big canvas{width:100%;height:28px;display:block;margin-top:6px}
+.twocol{display:grid;grid-template-columns:1fr;gap:14px}
+@media(min-width:900px){.twocol{grid-template-columns:1fr 1fr}}
+.actrow{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.actrow:last-of-type{border-bottom:0}
+.lbl{width:44px;color:var(--mut);flex-shrink:0}
+.btn{border:0;border-radius:8px;background:var(--acc);color:#fff;padding:7px 15px;font-size:13px;cursor:pointer;font-weight:600}
+.btn:active{filter:brightness(.9)}
+.btn.green{background:var(--ok)}
+.btn.red{background:var(--bad)}
+.btn.gray{background:var(--chip);color:var(--ink)}
+.astat{margin-left:auto;font-size:12px;font-weight:700;color:var(--mut)}
+.astat.on{color:var(--ok)}
+.astat.act{color:var(--warn)}
+.actrow input[type=number]{width:78px;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;background:var(--card);color:var(--ink)}
+.actrow input[type=range]{flex:1;min-width:0;accent-color:var(--acc)}
+.unit{font-size:12px;color:var(--mut)}
+.servoval{width:34px;text-align:center;font-weight:700}
+.rule{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:var(--mut)}
+.rule .rdot{width:8px;height:8px;border-radius:50%;background:#c3ccd6;flex-shrink:0}
+.rule.on{color:var(--bad);font-weight:600}
+.rule.on .rdot{background:var(--bad)}
+.logpage{position:fixed;inset:0;background:var(--bg);z-index:20;overflow-y:auto;display:none;padding:14px 16px}
+.logpage.show{display:block}
+.loghead{display:flex;align-items:center;justify-content:space-between;max-width:1160px;margin:0 auto 12px}
+.portgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px;max-width:1160px;margin:0 auto}
+.pcard{background:var(--card);border-radius:14px;box-shadow:var(--sh);padding:12px 14px;display:flex;flex-direction:column}
+.phead{display:flex;align-items:center;gap:7px;font-size:13px;padding-bottom:8px}
+.pinfo{margin-left:auto;color:var(--mut);font-size:11px;font-weight:600}
+.pinfo.on{color:var(--ok)}
+.plog{flex:1;min-height:130px;max-height:190px;overflow-y:auto;background:var(--chip);border-radius:8px;padding:8px;margin:0;font:11px/1.6 Consolas,ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;color:var(--mut)}
+.psend{display:flex;gap:6px;margin-top:9px}
+.psend input{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12px;background:var(--card);color:var(--ink)}
+.psend .btn{padding:7px 14px;font-size:12px}
+.pstat{font-size:11px;color:var(--mut);margin-top:7px;text-align:right}
+footer{text-align:center;color:var(--mut);font-size:11px;margin:8px 0}
+</style>
+</head>
+<body>
+<header class="top"><div class="twrap">
+  <div class="ttl"><span class="dot" id="stDot"></span>智慧农场控制中心<span class="sub" id="stSub"></span></div>
+  <div class="tmeta"><span class="pill" id="stUp">--</span><button class="btn" onclick="document.getElementById('logPage').classList.add('show')">📋 日志</button></div>
+</div></header>
+
+<main class="wrap">
+  <div class="sechead"><h2>从机总览</h2><span class="mut" id="ovSub"></span></div>
+  <div class="ovgrid" id="ovGrid"></div>
+
+  <div class="sechead secgap"><h2>从机详情</h2><div class="tabs" id="tabs"></div></div>
+  <div class="card" id="detailCard">
+    <div class="cardhead"><h3>传感数据 <span class="mut" id="dName"></span></h3><span class="mut" id="dState">等待连接…</span></div>
+    <div class="sgrid" id="sGrid"></div>
+  </div>
+  <div class="twocol">
+    <div class="card">
+      <div class="cardhead"><h3>执行器控制</h3><span class="mut" id="actPort"></span></div>
+      <div class="actrow"><span class="lbl">水泵</span><button class="btn green" onclick="act('PUMP ON')">开</button><button class="btn gray" onclick="act('PUMP OFF')">关</button><span class="astat" id="st_pump">--</span></div>
+      <div class="actrow"><span class="lbl">风扇</span><button class="btn green" onclick="act('FAN FWD')">正转</button><button class="btn red" onclick="act('FAN REV')">反转</button><button class="btn gray" onclick="act('FAN STOP')">停</button><span class="astat" id="st_fan">--</span></div>
+      <div class="actrow"><span class="lbl">舵机</span><input type="range" id="servo" min="0" max="180" value="0" oninput="document.getElementById('servoVal').textContent=this.value" onchange="act('SERVO '+this.value)"><span class="servoval" id="servoVal">0</span>°<span class="astat" id="st_servo">--</span></div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h3>自动控制</h3><button id="autoBtn" class="btn gray" onclick="toggleAuto()">手动</button></div>
+      <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇正转</span></div>
+      <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇正转</span></div>
+      <div class="actrow"><span class="lbl">高湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发风扇反转排湿</span></div>
+      <div class="actrow"><button id="saveBtn" class="btn green" onclick="saveAuto()">保存阈值</button></div>
+      <div id="rules"></div>
+    </div>
+  </div>
+</main>
+
+<div class="logpage" id="logPage">
+  <div class="loghead"><h2>从机通信日志</h2><button class="btn red" onclick="document.getElementById('logPage').classList.remove('show')">✕ 关闭</button></div>
+  <div class="portgrid" id="ports"></div>
+</div>
+
+<footer>总览与数据 1.5 秒 / 自动控制 2 秒自动刷新 · 数据经 8000~8005 六端口采集</footer>
+
+<script>
+/* ============ 模拟层(仅本文件有):按 esp32-2 固件 v2 逻辑仿真 6 从机全部接入 ============
+   页面 HTML/CSS/JS 与固件内嵌网页逐字节一致,此处只替换 fetch 网络层:
+   - /api/status /api/ports /api/send 与 v1 相同
+   - /api/auto 带端口参数,每端口独立配置与规则状态(auto_ctrl 六实例)
+   场景:端口0 温度绕 30℃ 摆动(高温通风周期触发)/ 端口1 土壤持续干燥(自动浇水)/
+        端口4 CO₂ 持续偏高(高CO₂通风常触发)/ 其余平稳。 */
+(function(){
+'use strict';
+
+var BOOT_OFFSET_S = 5*3600 + 23*60 + 41;
+var T0 = Date.now();
+function upSec(){ return Math.floor((Date.now()-T0)/1000) + BOOT_OFFSET_S; }
+function p2(n){ return (n<10?'0':'')+n; }
+function fmtTs(s){ return p2(Math.floor(s/3600))+':'+p2(Math.floor(s%3600/60))+':'+p2(s%60); }
+function uptimeStr(){ var s=upSec(); return Math.floor(s/86400)+'d '+p2(Math.floor(s%86400/3600))+':'+p2(Math.floor(s%3600/60))+':'+p2(s%60); }
+
+/* ---------- 端口状态 ---------- */
+var PORT_MAX = 8;
+function logAt(p, sec, text){ p.log.push(fmtTs(sec)+' '+text); if(p.log.length>PORT_MAX) p.log.shift(); }
+function logNow(p, text){ logAt(p, upSec(), text); }
+
+function mkPort(i, name, ip, connAt, onAt, dataAt, init){
+  var p = {port:8000+i, clients:1, online:true, slave:name, rx:0, tx:0,
+           hasData:true, t:0, h:0, lux:0, soil:1, co2:0, tvoc:0,
+           pump:0, fan:0, servo:0, log:[]};
+  for(var k in init) p[k]=init[k];
+  p._base = {t:init.t, h:init.h, lux:init.lux, co2:init.co2, tvoc:init.tvoc};
+  p.rx = 1 + Math.max(0, Math.floor((upSec()-dataAt)/2));
+  logAt(p, connAt, '● 从机接入 '+ip);
+  logAt(p, onAt,   '★ '+name+' 已上线');
+  logAt(p, onAt,   '← @'+name+' online/');
+  logAt(p, dataAt, '⚙ 开始接收传感数据');
+  return p;
+}
+
+var ports = [
+  mkPort(0,'F8266-1','192.168.1.121', 5,  7,  9,  {t:32.1, h:57.8, lux:328,  soil:1, co2:612,  tvoc:43, fan:1, tx:159}),
+  mkPort(1,'F8266-2','192.168.1.122', 8,  10, 12, {t:23.7, h:66.2, lux:8460, soil:0, co2:588,  tvoc:37, pump:1, tx:1}),
+  mkPort(2,'F8266-3','192.168.1.123', 11, 13, 15, {t:27.9, h:61.5, lux:1240, soil:1, co2:655,  tvoc:52}),
+  mkPort(3,'F8266-4','192.168.1.124', 14, 16, 18, {t:25.2, h:54.0, lux:305,  soil:1, co2:545,  tvoc:28}),
+  mkPort(4,'F8266-5','192.168.1.125', 17, 19, 21, {t:28.6, h:63.8, lux:2100, soil:1, co2:1352, tvoc:61, fan:1, tx:1}),
+  mkPort(5,'F8266-6','192.168.1.126', 20, 22, 24, {t:24.8, h:58.9, lux:530,  soil:1, co2:590,  tvoc:33})
+];
+
+/* 端口 0 历史:整夜高温通风反复触发,环形日志只剩近期 FAN FWD/STOP 补发记录 */
+(function(){
+  var marks = [18513,18633,18753,18873,18993,19113,19233,19353];
+  ports[0].log = [];
+  for(var k=0;k<marks.length;k++) logAt(ports[0], marks[k], '→ @'+(k%2 ? 'FAN FWD' : 'FAN STOP')+'/');
+})();
+/* 端口 1/4 历史:自动浇水/CO₂ 通风曾各补发一条 */
+logAt(ports[1], 19000, '→ @PUMP ON/');
+logAt(ports[4], 19000, '→ @FAN FWD/');
+
+/* ---------- 从机执行命令 ---------- */
+function applyCmd(p, text){
+  if(text==='PUMP ON') p.pump=1;
+  else if(text==='PUMP OFF') p.pump=0;
+  else if(text==='FAN FWD') p.fan=1;
+  else if(text==='FAN REV') p.fan=2;
+  else if(text==='FAN STOP') p.fan=0;
+  else if(/^SERVO \d+$/.test(text)) p.servo = Math.max(0, Math.min(180, parseInt(text.slice(6),10)));
+}
+
+/* ---------- /api/send ---------- */
+function mockSend(opts){
+  var b = new URLSearchParams((opts&&opts.body)||'');
+  var port = parseInt(b.get('port'),10), text = b.get('text');
+  if(!b.has('port') || !b.has('text') || !text) return {ok:false, error:'缺少 port/text 参数'};
+  if(isNaN(port) || port<8000 || port>=8006) return {ok:false, error:'端口不在监听范围内'};
+  var p = ports[port-8000];
+  if(p.clients===0) return {ok:false, error:'该端口无已连接从机'};
+  applyCmd(p, text);
+  p.tx++;
+  logNow(p, '→ @'+text+'/');
+  return {ok:true, error:''};
+}
+
+/* ---------- auto_ctrl 六端口独立实例复刻 ---------- */
+var AC_CONFIRM_N = 3, AC_OVER_FACTOR = 1.2;
+function mkAc(){ return {enabled:true, tHigh:30, co2High:1200, hHigh:70, fanDir:0, pumpActive:false,
+  rules:[{name:'高温通风',hi:0,lo:0,active:false},{name:'高CO₂通风',hi:0,lo:0,active:false},
+         {name:'高湿排湿',hi:0,lo:0,active:false},{name:'土壤浇水',hi:0,lo:0,active:false}],
+  ghHi:0, ghLo:0, ghActive:false}; }
+var acs = [mkAc(),mkAc(),mkAc(),mkAc(),mkAc(),mkAc()];
+acs[0].rules[0].active = true; acs[0].rules[0].hi = 9; acs[0].fanDir = 1;  // 与端口0历史一致
+acs[1].rules[3].active = true; acs[1].rules[3].hi = 9; acs[1].pumpActive = true; // 干燥已浇水
+acs[4].rules[1].active = true; acs[4].rules[1].hi = 9; acs[4].fanDir = 1;  // CO₂ 通风中
+
+function sendCmd(idx, txt){
+  var p = ports[idx];
+  applyCmd(p, txt); p.tx++; logNow(p, '→ @'+txt+'/');
+}
+function upd(r, over, safe){
+  if(over){ r.hi++; r.lo=0; } else if(safe){ r.lo++; r.hi=0; } else return;
+  if(!r.active && r.hi>=AC_CONFIRM_N) r.active=true;
+  else if(r.active && r.lo>=AC_CONFIRM_N) r.active=false;
+}
+function updGh(ac, over, safe){   // 大棚独立防抖(else return 只跳出本函数,不阻断后续校正)
+  if(over){ ac.ghHi++; ac.ghLo=0; } else if(safe){ ac.ghLo++; ac.ghHi=0; } else return;
+  if(!ac.ghActive && ac.ghHi>=AC_CONFIRM_N) ac.ghActive=true;
+  else if(ac.ghActive && ac.ghLo>=AC_CONFIRM_N) ac.ghActive=false;
+}
+function acTick(){
+  for(var idx=0; idx<ports.length; idx++){
+    var ac = acs[idx], p = ports[idx];
+    if(!ac.enabled) continue;
+    if(!p.hasData) continue;
+    upd(ac.rules[0], p.t>=ac.tHigh,     p.t<=ac.tHigh-2);
+    upd(ac.rules[1], p.co2>=ac.co2High, p.co2<=ac.co2High-200);
+    upd(ac.rules[2], p.h>=ac.hHigh,     p.h<=ac.hHigh-5);
+    upd(ac.rules[3], p.soil===0,        p.soil===1);
+    updGh(ac,
+      (p.t>=ac.tHigh && p.t>=ac.tHigh*AC_OVER_FACTOR) ||
+      (p.co2>=ac.co2High && p.co2>=ac.co2High*AC_OVER_FACTOR) ||
+      (p.h>=ac.hHigh && p.h>=ac.hHigh*AC_OVER_FACTOR),
+      p.t<=ac.tHigh && p.co2<=ac.co2High && p.h<=ac.hHigh);
+    var heat = ac.rules[0].active || ac.rules[1].active, wet = ac.rules[2].active;
+    ac.pumpActive = ac.rules[3].active;
+    ac.fanDir = heat ? 1 : (wet ? 2 : 0);
+    if(p.online && p.hasData){
+      if(p.fan!==ac.fanDir) sendCmd(idx, ac.fanDir===1?'FAN FWD':(ac.fanDir===2?'FAN REV':'FAN STOP'));
+      var wp = ac.pumpActive?1:0;
+      if(p.pump!==wp) sendCmd(idx, wp?'PUMP ON':'PUMP OFF');
+      var ws = ac.ghActive?180:0;
+      if(p.servo!==ws) sendCmd(idx, ws?'SERVO 180':'SERVO 0');
+    }
+  }
+}
+
+/* ---------- 传感数据慢漂移 ---------- */
+function r1(x){ return Math.round(x*10)/10; }
+function walk(){
+  var s = upSec();
+  ports.forEach(function(p,i){
+    p.rx++;
+    if(i===0){
+      p.t    = r1(30 + 2.2*Math.sin(2*Math.PI*(s-19353)/240) + (Math.random()-.5)*.2);
+      p.h    = r1(57.8 + 2.5*Math.sin(s/97) + (Math.random()-.5)*.6);
+      p.lux  = Math.max(0, Math.round(328 + 40*Math.sin(s/61) + (Math.random()-.5)*30));
+      p.co2  = Math.max(400, Math.round(612 + 60*Math.sin(s/83) + (Math.random()-.5)*40));
+      p.tvoc = Math.max(0,  Math.round(43 + 8*Math.sin(s/71) + (Math.random()-.5)*8));
+    }else{
+      var B = p._base;
+      p.t    = r1(p.t + (B.t-p.t)*.05 + (Math.random()-.5)*.3);
+      p.h    = r1(p.h + (B.h-p.h)*.05 + (Math.random()-.5)*.6);
+      p.lux  = Math.max(0, Math.round(p.lux + (B.lux-p.lux)*.05 + (Math.random()-.5)*60));
+      p.co2  = Math.max(400, Math.round(p.co2 + (B.co2-p.co2)*.05 + (Math.random()-.5)*(i===4?20:30)));
+      p.tvoc = Math.max(0,  Math.round(p.tvoc + (B.tvoc-p.tvoc)*.05 + (Math.random()-.5)*6));
+    }
+  });
+  acTick();
+}
+setInterval(walk, 2000);
+
+/* ---------- /api/status ---------- */
+function mockStatus(){
+  return {mode:'STA', connected:true, ssid:'ESP-TEST', ip:'192.168.1.109', gw:'192.168.1.1',
+          mask:'255.255.255.0', mac:'F4:12:FA:6C:5E:12',
+          rssi:Math.round(-55 + 2*Math.sin(upSec()/47) + (Math.random()-.5)), ch:6,
+          host:'esp32s3-2', uptime:uptimeStr(),
+          heapFree:221, heapSize:320, psramFree:8101, psramSize:8192,
+          flashMB:16, flashMHz:80, chip:'ESP32-S3 rev3 x2 核', cpuMHz:240,
+          tempC:'45.8', sdk:'v4.4.7-1-gbd42a0a'};
+}
+
+/* ---------- /api/ports ---------- */
+function snap(p){
+  return {port:p.port, clients:p.clients, online:p.online, slave:p.slave, rx:p.rx, tx:p.tx,
+          hasData:p.hasData, t:p.t, h:p.h, lux:p.lux, soil:p.soil, co2:p.co2, tvoc:p.tvoc,
+          pump:p.pump, fan:p.fan, servo:p.servo, log:p.log.slice(0, PORT_MAX)};
+}
+
+/* ---------- /api/auto 六端口独立 ---------- */
+function portFromQ(qs){ var v=(qs||'').match(/port=(\d+)/); return v?parseInt(v[1],10):8000; }
+function mockAuto(port){
+  if(isNaN(port) || port<8000 || port>=8006) return {ok:false, error:'端口不在监听范围内'};
+  var ac = acs[port-8000];
+  return {port:port, enabled:ac.enabled, tHigh:ac.tHigh, co2High:ac.co2High, hHigh:ac.hHigh,
+          fanDir:ac.fanDir, pumpActive:ac.pumpActive, servoActive:ac.ghActive,
+          rules:ac.rules.map(function(r){ return {name:r.name, active:r.active}; })};
+}
+function mockSetAuto(opts){
+  var b = new URLSearchParams((opts&&opts.body)||'');
+  var port = parseInt(b.get('port'),10);
+  if(isNaN(port) || port<8000 || port>=8006) return {ok:false, error:'端口不在监听范围内'};
+  if(!b.has('tHigh') || !b.has('co2High') || !b.has('hHigh')) return {ok:false, error:'缺少阈值参数'};
+  var ac = acs[port-8000];
+  ac.enabled  = b.get('enabled')==='true';
+  ac.tHigh    = parseFloat(b.get('tHigh'))   || 0;
+  ac.co2High  = parseFloat(b.get('co2High')) || 0;
+  ac.hHigh    = parseFloat(b.get('hHigh'))   || 0;
+  return {ok:true};
+}
+
+/* ---------- fetch 拦截 ---------- */
+function _r(o){ return Promise.resolve({ok:true, json:function(){ return Promise.resolve(o); }}); }
+window.fetch = function(u, opts){
+  u = String(u);
+  if(u.indexOf('/api/status')===0) return _r(mockStatus());
+  if(u.indexOf('/api/ports')===0)  return _r(ports.map(snap));
+  if(u.indexOf('/api/send')===0)   return _r(mockSend(opts));
+  if(u.indexOf('/api/auto')===0){
+    if(opts && opts.method==='POST') return _r(mockSetAuto(opts));
+    return _r(mockAuto(portFromQ(u.split('?')[1])));
+  }
+  return _r({});
+};
+
+/* ---------- 角标提示(非固件内容) ---------- */
+var badge = document.createElement('div');
+badge.textContent = '⚙ 模拟环境 · 6 从机在线';
+badge.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:99;background:rgba(52,73,94,.85);'+
+                      'color:#fff;font:12px/1 "Microsoft YaHei",sans-serif;padding:6px 10px;'+
+                      'border-radius:12px;opacity:.85;pointer-events:none';
+document.body.appendChild(badge);
+})();
+</script>
+<script>
+function q(id,v){document.getElementById(id).textContent=v}
+function el(id){return document.getElementById(id)}
+let PD=null,sel=0;
+let hist={},autoInited={};
+/* 六指标定义:f=格式化 p=进度条占比 w=越界警示 soil 为 0/1 两态特殊处理 */
+const METRICS=[
+ {k:'t',n:'温度',u:'℃',f:v=>v.toFixed(1),p:v=>Math.min(v/50,1),w:v=>v>35},
+ {k:'h',n:'湿度',u:'%',f:v=>v.toFixed(1),p:v=>Math.min(v/100,1),w:()=>false},
+ {k:'lux',n:'光照',u:'lx',f:v=>Math.round(v),p:v=>Math.min(v/2000,1),w:()=>false},
+ {k:'soil',n:'土壤',u:'',soil:true},
+ {k:'co2',n:'CO₂',u:'ppm',f:v=>Math.round(v),p:v=>Math.max(0,Math.min((v-400)/1600,1)),w:v=>v>1200},
+ {k:'tvoc',n:'TVOC',u:'ppb',f:v=>Math.round(v),p:v=>Math.min(v/1000,1),w:v=>v>500}];
+
+/* ---------- 顶栏设备状态 ---------- */
+async function refreshStatus(){
+ try{
+  const d=await(await fetch('/api/status')).json();
+  el('stDot').className='dot '+(d.connected?'on':(d.mode==='AP'?'ap':'off'));
+  q('stSub',(d.host||'')+' · '+(d.ip||'')+(d.mode==='STA'?' · '+d.rssi+'dBm':''));
+  q('stUp',d.uptime);
+ }catch(e){
+  el('stDot').className='dot off';q('stSub','设备无响应');
+ }
+}
+
+/* ---------- 传感大卡(构建一次,此后按 id 更新) ---------- */
+function buildSensorGrid(){
+ el('sGrid').innerHTML=METRICS.map(m=>
+  '<div class="big"><div class="k">'+m.n+'</div><div class="v" id="v_'+m.k+'">--</div>'+
+  '<div class="bar"><i id="b_'+m.k+'"></i></div><canvas id="sp_'+m.k+'" width="280" height="56"></canvas></div>').join('');
+ hist={};METRICS.forEach(m=>hist[m.k]=[]);
+}
+function fanTxt(f){return f===1?'正转':(f===2?'反转':'停')}
+function ghTxt(s){return s===0?'关棚':(s===180?'开棚':s+'°')}
+
+/* ---------- 从机总览 ---------- */
+function metricHTML(d,m){
+ if(m.soil){
+  if(d.soil===null)return '<div class="mi"><div class="k">土壤</div><div class="v">--</div><div class="bar"><i style="width:0"></i></div></div>';
+  return '<div class="mi"><div class="k">土壤</div><div class="v">'+(d.soil===1?'湿润':'干燥')+'</div><div class="bar"><i class="'+(d.soil===1?'ok':'warn')+'" style="width:'+(d.soil===1?100:20)+'%"></i></div></div>';
+ }
+ if(d[m.k]===null)return '<div class="mi"><div class="k">'+m.n+'</div><div class="v">--</div><div class="bar"><i style="width:0"></i></div></div>';
+ return '<div class="mi"><div class="k">'+m.n+'</div><div class="v">'+m.f(d[m.k])+'<small>'+m.u+'</small></div><div class="bar"><i class="'+(m.w(d[m.k])?'warn':'')+'" style="width:'+(m.p(d[m.k])*100)+'%"></i></div></div>';
+}
+function updateOverview(){
+ el('ovSub').textContent='在线 '+PD.filter(d=>d.online).length+' / '+PD.length;
+ el('ovGrid').innerHTML=PD.map((d,i)=>
+  '<div class="scard'+(d.online?'':' off')+'" onclick="selectSlave('+i+',true)">'+
+   '<div class="schead"><span class="dot '+(d.online?'on':'')+'"></span><b>'+(d.slave||('端口'+d.port))+'</b><span class="port">:'+d.port+'</span>'+
+   '<span class="stchip '+(d.online?'on':'')+'">'+(d.online?'在线':(d.clients>0?'未上线':'离线'))+'</span></div>'+
+   '<div class="mgrid">'+(d.hasData?METRICS.map(m=>metricHTML(d,m)).join(''):'<span class="mut">等待传感数据…</span>')+'</div>'+
+   '<div class="achips">'+
+    '<span class="achip'+(d.pump===1?' on':'')+'">泵 '+(d.pump===1?'开':'关')+'</span>'+
+    '<span class="achip'+(d.fan>0?' act':'')+'">扇 '+fanTxt(d.fan)+'</span>'+
+    '<span class="achip'+(d.servo===180?' act':'')+'">棚 '+ghTxt(d.servo)+'</span></div>'+
+   '<div class="afoot">收 '+d.rx+' / 发 '+d.tx+'</div>'+
+  '</div>').join('');
+}
+
+/* ---------- 从机详情 ---------- */
+function buildTabs(){
+ el('tabs').innerHTML=PD.map((d,i)=>
+  '<button class="tab'+(i===sel?' on':'')+'" onclick="selectSlave('+i+')"><span class="dot '+(d.online?'on':'')+'"></span>'+(d.slave||('端口'+d.port))+'</button>').join('');
+}
+function selectSlave(i,scroll){
+ sel=i;
+ METRICS.forEach(m=>hist[m.k]=[]);   // 清空趋势采样,重新累积
+ if(PD){buildTabs();updateDetail();refreshAuto();}
+ if(scroll)el('detailCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function updateDetail(){
+ const d=PD&&PD[sel];if(!d)return;
+ q('dName',(d.slave||('端口'+d.port))+' :'+d.port);
+ el('actPort').textContent='下发端口 '+d.port;
+ q('dState',d.hasData?(d.online?'从机在线':'从机已离线'):'等待数据…');
+ METRICS.forEach(m=>{
+  if(m.soil){
+   if(d.soil===null){q('v_soil','--');el('b_soil').style.width='0'}
+   else{q('v_soil',d.soil===1?'湿润':'干燥');const b=el('b_soil');b.style.width=d.soil===1?'100%':'20%';b.className=d.soil===1?'ok':'warn'}
+  }else{
+   const v=d[m.k];
+   el('v_'+m.k).innerHTML=v===null?'--':m.f(v)+'<small>'+m.u+'</small>';
+   const b=el('b_'+m.k);
+   b.style.width=v===null?'0':(m.p(v)*100)+'%';
+   b.className=v!==null&&m.w(v)?'warn':'';
+  }
+ });
+ const sp=el('st_pump');sp.textContent=d.pump===1?'开':'关';sp.className='astat'+(d.pump===1?' on':'');
+ const sf=el('st_fan');sf.textContent=fanTxt(d.fan);sf.className='astat'+(d.fan>0?' act':'');
+ const ss=el('st_servo');ss.textContent=ghTxt(d.servo);ss.className='astat'+(d.servo===180?' act':'');
+ // 舵机滑条与回报角度同步(拖动中不强制覆盖)
+ if(document.activeElement!==el('servo')){el('servoVal').textContent=d.servo;el('servo').value=d.servo;}
+}
+/* 近 60 个采样点的迷你趋势线(canvas) */
+function pushSpark(){
+ const d=PD&&PD[sel];if(!d||!d.hasData)return;
+ METRICS.forEach(m=>{
+  const v=m.soil?d.soil:d[m.k];
+  hist[m.k].push(v===null?null:v);
+  if(hist[m.k].length>60)hist[m.k].shift();
+  drawSpark(m.k);
+ });
+}
+function drawSpark(k){
+ const cv=el('sp_'+k);if(!cv)return;
+ const ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
+ ctx.clearRect(0,0,W,H);
+ const a=hist[k].filter(v=>v!==null);
+ if(a.length<2)return;
+ let mn=Math.min(...a),mx=Math.max(...a);
+ if(mx-mn<1e-6){mn-=.5;mx+=.5}
+ const pad=4;let started=false;
+ ctx.beginPath();
+ hist[k].forEach((v,i)=>{
+  if(v===null){started=false;return}
+  const x=pad+(W-2*pad)*i/Math.max(hist[k].length-1,1);
+  const y=H-pad-(H-2*pad)*(v-mn)/(mx-mn);
+  if(started)ctx.lineTo(x,y);else{ctx.moveTo(x,y);started=true}
+ });
+ ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--acc')||'#2f7df6';
+ ctx.lineWidth=2;ctx.lineJoin='round';ctx.stroke();
+}
+
+/* ---------- 执行器控制(下发到当前选中从机端口) ---------- */
+function selPort(){return PD?PD[sel].port:8000}
+async function act(cmd){
+ if(!PD)return;
+ try{
+  const body=new URLSearchParams({port:String(selPort()),text:cmd});
+  const r=await(await fetch('/api/send',{method:'POST',body:body})).json();
+  if(!r.ok)alert('控制失败：'+(r.error||'从机离线'));
+ }catch(e){alert('控制失败：网络错误')}
+}
+
+/* ---------- 自动控制(每从机独立配置) ---------- */
+async function refreshAuto(){
+ try{
+  const d=await(await fetch('/api/auto?port='+selPort())).json();
+  if(!autoInited[d.port]){   // 每端口仅首次填充输入框,避免冲掉正在编辑的阈值
+   el('ac_t').value=d.tHigh;el('ac_co2').value=d.co2High;el('ac_h').value=d.hHigh;
+   autoInited[d.port]=true;
+  }
+  const b=el('autoBtn');
+  b.textContent=d.enabled?'自动':'手动';
+  b.className='btn '+(d.enabled?'green':'gray');
+  el('rules').innerHTML=d.rules.map(r=>
+   '<div class="rule'+(r.active?' on':'')+'"><span class="rdot"></span>'+r.name+(r.active?' 已触发':' 未触发')+'</div>').join('');
+ }catch(e){}
+}
+async function saveAuto(){
+ const body=new URLSearchParams({port:String(selPort()),enabled:String(el('autoBtn').textContent==='自动'),tHigh:el('ac_t').value,co2High:el('ac_co2').value,hHigh:el('ac_h').value});
+ try{
+  const r=await(await fetch('/api/auto',{method:'POST',body:body})).json();
+  if(r.ok){
+   const sb=el('saveBtn');sb.textContent='已保存 ✓';sb.disabled=true;
+   setTimeout(()=>{sb.textContent='保存阈值';sb.disabled=false},1500);
+   refreshAuto();
+  }else alert('保存失败：'+(r.error||''));
+ }catch(e){alert('保存失败：网络错误')}
+}
+async function toggleAuto(){
+ const b=el('autoBtn');
+ const nowAuto=b.textContent==='自动';
+ b.textContent=nowAuto?'手动':'自动';
+ b.className='btn '+(nowAuto?'gray':'green');
+ await saveAuto();
+}
+
+/* ---------- 通信日志二级页 ---------- */
+function buildLogCards(){
+ el('ports').innerHTML=PD.map((d,i)=>
+  '<div class="pcard"><div class="phead"><span class="dot" id="pd'+i+'"></span><b>端口 '+d.port+'</b><span class="pinfo" id="pn'+i+'">无从机</span></div>'+
+  '<pre class="plog" id="pl'+i+'"></pre>'+
+  '<div class="psend"><input id="pi'+i+'" placeholder="输入要发送的内容"><button class="btn" id="pb'+i+'">发送</button></div>'+
+  '<div class="pstat" id="ps'+i+'">收 0 / 发 0</div></div>').join('');
+ PD.forEach((d,i)=>{
+  el('pb'+i).onclick=()=>sendMsg(i);
+  el('pi'+i).onkeydown=e=>{if(e.key==='Enter')sendMsg(i)};
+ });
+}
+function updateLogCards(){
+ PD.forEach((d,i)=>{
+  el('pd'+i).className='dot '+(d.online?'on':'');
+  const info=el('pn'+i);
+  if(d.online){info.className='pinfo on';info.textContent=d.slave+' 已上线'}
+  else if(d.clients>0){info.className='pinfo';info.textContent='已连接·未上线'}
+  else{info.className='pinfo';info.textContent='无从机'}
+  const log=el('pl'+i);
+  log.textContent=d.log.join('\n')||'等待从机连接…';
+  log.scrollTop=log.scrollHeight;
+  q('ps'+i,'收 '+d.rx+' / 发 '+d.tx+(d.clients>0?' · 连接 '+d.clients:''));
+ });
+}
+async function sendMsg(i){
+ const inp=el('pi'+i),text=inp.value.trim();
+ if(!text||!PD)return;
+ try{
+  const body=new URLSearchParams({port:String(PD[i].port),text:text});
+  const r=await(await fetch('/api/send',{method:'POST',body:body})).json();
+  if(r.ok){inp.value='';refreshPorts()}
+  else alert('发送失败：'+(r.error||'未知错误'));
+ }catch(e){alert('发送失败：网络错误')}
+}
+
+/* ---------- 轮询 ---------- */
+async function refreshPorts(){
+ try{
+  const a=await(await fetch('/api/ports')).json();
+  const first=!PD;
+  PD=a;
+  if(first){buildTabs();buildLogCards()}
+  buildTabs();
+  updateOverview();updateDetail();pushSpark();updateLogCards();
+ }catch(e){}
+}
+buildSensorGrid();
+refreshStatus();setInterval(refreshStatus,3000);
+refreshPorts();setInterval(refreshPorts,1500);
+refreshAuto();setInterval(refreshAuto,2000);
+</script>
+</body>
+</html>

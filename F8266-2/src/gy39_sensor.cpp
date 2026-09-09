@@ -52,6 +52,34 @@ struct Gy39Sensor::Impl {
   }
 };
 
+// ===================== 内部小工具 =====================
+
+// 全总线扫描并打印应答的设备地址（仅在 GY-39 探测失败时调用一次，辅助现场排障）
+static void scanBus() {
+  Serial.print(F("[gy39] I2C 总线扫描："));
+  uint8_t found = 0;
+  for (uint8_t a = 1; a < 127; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0) {
+      Serial.print(F("0x"));
+      Serial.print(a, HEX);
+      // 已知地址标注归属，其余打印原始地址
+      if (a == 0x3C)      Serial.print(F("(OLED)"));
+      else if (a == 0x58) Serial.print(F("(SGP30)"));
+      else if (a == 0x5B) Serial.print(F("(GY39)"));
+      else if (a == 0x4A) Serial.print(F("(MAX44009?)"));
+      else if (a == 0x76 || a == 0x77) Serial.print(F("(BME280?)"));
+      Serial.print(' ');
+      found++;
+    }
+  }
+  if (found == 0) Serial.println(F("无设备应答（查 VCC/GND/SDA/SCL）"));
+  else Serial.println();
+  // 结果解读：见 0x5B → 模块已在总线（另查寄存器读取）；见 0x4A/0x76/0x77 →
+  // S1 被接 GND（直连芯片模式），0x5B 不会出现，应恢复 S1 默认；只有 OLED/SGP30 →
+  // GY-39 未应答，多为 S0 未接 GND（UART 模式）或 CT/DR 接反。
+}
+
 // ===================== 公开接口 =====================
 
 Gy39Sensor::Gy39Sensor() : _p(new Impl) {}
@@ -98,6 +126,7 @@ bool Gy39Sensor::begin() {
   } else {
     Serial.println(F("[gy39] 未检测到 GY-39（检查接线/地址），将周期重扫"));
     Serial.println(F("[gy39] 提示：模块须为 I2C 模式（S0 焊桥接 GND），CT=SCL、DR=SDA"));
+    scanBus();   // 打印总线上实际应答的设备，辅助定位（S0 模式/接线/接反）
   }
   return _p->present;
 }
