@@ -61,6 +61,7 @@ struct Gy39Sensor::Impl {
   // ---- I2C（0x5B）读事务三样式 ----
   uint8_t  style = 0;            // 0=A/B=C 记忆成功样式，见 readRegs
   uint8_t  verboseLeft = 6;      // 剩余详细失败打印配额（限噪）
+  uint8_t  maxVerboseLeft = 10;  // MAX44009 原始字节打印配额（现场标定排查用）
 
   // ---- UART 帧解析状态机 ----
   SoftwareSerial uart;           // 仅收不发（TX 引脚 -1）
@@ -116,6 +117,8 @@ struct Gy39Sensor::Impl {
   }
 
   // ---- MAX44009 读光照：读 0x03(高)/0x04(低)，lux = M·2^E·0.045 ----
+  // 寄存器布局（数据手册）：0x03 = E[3:0] M[11:8]；0x04 = M[7:4] 0000（低半字节未用）。
+  // ★现场标定排查：前 N 次读数打印原始字节（光照与 F8266-1 差 ~100 倍时定位解码/环境）。
   bool readMax(float &luxOut) {
     Wire.beginTransmission(GY39_ADDR_MAX);
     Wire.write(0x03);                          // 光照寄存器起始地址
@@ -124,8 +127,20 @@ struct Gy39Sensor::Impl {
     uint8_t hi = (uint8_t)Wire.read();
     uint8_t lo = (uint8_t)Wire.read();
     uint8_t e = hi >> 4;
-    unsigned long m = ((unsigned long)(hi & 0x0F) << 4) | (lo & 0x0F);
+    unsigned long m = ((unsigned long)(hi & 0x0F) << 4) | (lo >> 4);
     luxOut = (float)(m << e) * 0.045f;
+    if (maxVerboseLeft) {
+      maxVerboseLeft--;
+      Serial.print(F("[gy39] MAX44009 raw: hi=0x"));
+      if (hi < 16) Serial.print('0');
+      Serial.print(hi, HEX);
+      Serial.print(F(" lo=0x"));
+      if (lo < 16) Serial.print('0');
+      Serial.print(lo, HEX);
+      Serial.print(F(" -> "));
+      Serial.print(luxOut, 1);
+      Serial.println(F("lux"));
+    }
     return luxOut <= 200000.0f;                // 超物理范围视为异常读
   }
 
