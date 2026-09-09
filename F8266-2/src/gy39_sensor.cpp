@@ -1,12 +1,16 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>   // ESP8266 核心自带（EspSoftwareSerial），GY-39 UART 模式接收
+#include <Adafruit_BME280.h>  // GY-39 直连模式：BME280 温/湿/气压（含补偿计算）
 
 #include "net_config.h"   // PERIPH_I2C_SDA / PERIPH_I2C_SCL / PERIPH_GY39_UART_RX
 #include "gy39_sensor.h"
 
 // ===================== 采集参数（改地址/周期只动这里）=====================
 #define GY39_I2C_ADDR    0x5B     // GY-39 I2C 模式 7 位地址（MCU_IIC，S0 焊桥接 GND）
+#define GY39_ADDR_BME1   0x76     // 直连模式 BME280 地址①（SDO 接地）
+#define GY39_ADDR_BME2   0x77     // 直连模式 BME280 地址②（SDO 接高）
+#define GY39_ADDR_MAX    0x4A     // 直连模式 MAX44009 光照地址（固定）
 #define GY39_READ_MS     2000UL   // 采集周期（毫秒；UART 帧约 1s 一发，按需取用）
 #define GY39_FAIL_STREAK 3        // 连续失败 N 次判定传感器故障
 #define GY39_RESCAN_MS   10000UL  // 未检测到传感器时的重扫周期（热插拔自愈）
@@ -43,7 +47,7 @@ static void scanBus() {
 // ===================== 实现体 =====================
 struct Gy39Sensor::Impl {
   // ---- 公共状态 ----
-  uint8_t  mode = 0;             // 0=未检测到 1=I2C(0x5B) 2=UART
+  uint8_t  mode = 0;             // 0=未检测到 1=I2C-MCU(0x5B) 2=UART 3=直连芯片(BME280+MAX44009)
   bool     thpValid = false;     // 温/湿/气压有效
   bool     luxValid = false;     // 光照有效
   float    temp = 0.0f;          // 最近一次有效温度（°C）
@@ -67,6 +71,12 @@ struct Gy39Sensor::Impl {
   uint8_t  uBuf[12];             // 数据域缓冲（0x45 帧 len=10）
   uint32_t lastFrameMs = 0;      // 最近一次校验通过帧的时刻
 
+  // ---- 直连芯片模式（S1 焊桥 GND / 板边 I2C 焊盘，绕过模块 MCU）----
+  Adafruit_BME280 bme;           // BME280 温/湿/气压（begin 时读校准参数）
+  uint8_t  bmeAddr = 0;          // begin 成功的 BME280 地址（0x76/0x77；0=未上线）
+  bool     maxOk = false;        // MAX44009 是否应答
+  uint8_t  luxFail = 0;          // 光照路径连续失败计数（独立于温湿压路径）
+
   Impl() : uart(PERIPH_GY39_UART_RX, -1) {}
 
   // 大端读取：buf 起的 n 字节拼为无符号整数（n ≤ 4）
@@ -82,10 +92,41 @@ struct Gy39Sensor::Impl {
            pa >= 30000UL && pa <= 120000UL;
   }
 
-  // 探测总线上是否有模块（I2C 地址 ACK 即认为在）
-  bool probeI2c() {
-    Wire.beginTransmission(GY39_I2C_ADDR);
+  // 探测某 I2C 地址是否应答（地址 ACK 即认为在）
+  static bool probeAddr(uint8_t a) {
+    Wire.beginTransmission(a);
     return Wire.endTransmission() == 0;
+  }
+
+  // ---- 直连模式初始化：BME280 两个候选地址依次 begin，MAX44009 探测 ----
+  // MAX44009 上电默认即连续自动量程模式（800ms 周期），无需写配置即可读。
+  // 返回是否任一芯片在线。
+  bool startDirect() {
+    bmeAddr = 0;
+    if (bme.begin(GY39_ADDR_BME1, &Wire)) bmeAddr = GY39_ADDR_BME1;
+    else if (bme.begin(GY39_ADDR_BME2, &Wire)) bmeAddr = GY39_ADDR_BME2;
+    maxOk = probeAddr(GY39_ADDR_MAX);
+    failStreak = 0;
+    luxFail = 0;
+    Serial.print(F("[gy39] GY-39 直连芯片模式（绕过模块 MCU）：BME280 "));
+    Serial.print(bmeAddr == 0 ? F("未应答") : (bmeAddr == GY39_ADDR_BME1 ? F("0x76") : F("0x77")));
+    Serial.print(F("，MAX44009 "));
+    Serial.println(maxOk ? F("0x4A") : F("未应答"));
+    return bmeAddr != 0 || maxOk;
+  }
+
+  // ---- MAX44009 读光照：读 0x03(高)/0x04(低)，lux = M·2^E·0.045 ----
+  bool readMax(float &luxOut) {
+    Wire.beginTransmission(GY39_ADDR_MAX);
+    Wire.write(0x03);                          // 光照寄存器起始地址
+    if (Wire.endTransmission(false) != 0) return false;
+    if (Wire.requestFrom(GY39_ADDR_MAX, (uint8_t)2) != 2) return false;
+    uint8_t hi = (uint8_t)Wire.read();
+    uint8_t lo = (uint8_t)Wire.read();
+    uint8_t e = hi >> 4;
+    unsigned long m = ((unsigned long)(hi & 0x0F) << 4) | (lo & 0x0F);
+    luxOut = (float)(m << e) * 0.045f;
+    return luxOut <= 200000.0f;                // 超物理范围视为异常读
   }
 
   // ---- I2C 单个样式尝试：true = 14 字节全部到手 ----
@@ -215,13 +256,17 @@ bool Gy39Sensor::begin() {
   _p->lastScanMs = millis() - GY39_RESCAN_MS;
   _p->lastReadMs = millis() - GY39_READ_MS;
 
-  if (_p->probeI2c()) {
+  if (_p->probeAddr(GY39_I2C_ADDR)) {
     _p->mode = 1;
     Serial.println(F("[gy39] GY-39 已检测到（I2C 0x5B 模式）"));
+  } else if (_p->startDirect()) {
+    _p->mode = 3;   // 直连芯片（BME280+MAX44009 已在总线）
   } else {
-    Serial.println(F("[gy39] 未检测到 GY-39 I2C（0x5B），并行监听 UART（GPIO14）"));
-    Serial.println(F("[gy39] 接线二选一：UART 免焊（CT→GPIO14，出厂默认模式）"));
-    Serial.println(F("[gy39]           I2C（S0 焊桥接 GND，CT→SCL、DR→SDA）"));
+    Serial.println(F("[gy39] 未检测到 GY-39，将周期重扫 + 并行监听 UART（GPIO14）"));
+    Serial.println(F("[gy39] 接线三选一，固件自适应："));
+    Serial.println(F("[gy39]  ① 直连芯片（推荐）：模块板边 SDA/SCL 焊盘→板上 SDA/SCL"));
+    Serial.println(F("[gy39]  ② UART 免焊（出厂默认）：CT→GPIO14，DR 不接"));
+    Serial.println(F("[gy39]  ③ I2C-MCU（S0 焊桥 GND）：CT→SCL、DR→SDA（0x5B）"));
     scanBus();   // 打印总线上实际应答的设备，辅助定位
   }
   return true;
@@ -231,7 +276,7 @@ void Gy39Sensor::handle() {
   uint32_t now = millis();
 
   if (_p->mode == 0) {
-    // ---- 未上线：UART 帧流提升 + 周期 I2C 重扫，哪边先来用哪边 ----
+    // ---- 未上线：UART 帧流提升 + 周期 I2C/直连重扫，哪边先来用哪边 ----
     _p->pumpUart();
     if (_p->lastFrameMs != 0 && now - _p->lastFrameMs < GY39_UART_ALIVE_MS) {
       _p->mode = 2;
@@ -241,11 +286,80 @@ void Gy39Sensor::handle() {
     }
     if (now - _p->lastScanMs >= GY39_RESCAN_MS) {
       _p->lastScanMs = now;
-      if (_p->probeI2c()) {
+      if (_p->probeAddr(GY39_I2C_ADDR)) {
         _p->mode = 1;
         _p->failStreak = 0;
         Serial.println(F("[gy39] 重扫发现 GY-39（I2C 0x5B），恢复采集"));
+      } else if (_p->startDirect()) {
+        _p->mode = 3;   // 直连芯片上总线（热插拔/换接线）
       }
+    }
+    return;
+  }
+
+  if (_p->mode == 3) {
+    // ---- 直连模式：BME280 + MAX44009 周期采集；双芯片均消失则回探测 ----
+    if (now - _p->lastReadMs < GY39_READ_MS) return;
+    _p->lastReadMs = now;
+
+    bool bmeAlive = _p->bmeAddr != 0 && Impl::probeAddr(_p->bmeAddr);
+    bool maxAlive = _p->maxOk && Impl::probeAddr(GY39_ADDR_MAX);
+    if (!bmeAlive && !maxAlive) {
+      _p->mode = 0;
+      _p->thpValid = _p->luxValid = false;
+      _p->lastScanMs = now;
+      Serial.println(F("[gy39] 直连芯片均无应答，回到探测（支持热插拔）"));
+      return;
+    }
+
+    // 温/湿/气压（BME280，Adafruit 库含出厂校准补偿）
+    if (bmeAlive) {
+      float t = _p->bme.readTemperature();
+      float h = _p->bme.readHumidity();
+      float pa = _p->bme.readPressure();
+      if (isnan(t) || isnan(h) || isnan(pa) ||
+          !Impl::sane(t, h, (unsigned long)pa)) {
+        _p->failStreak++;
+        if (_p->failStreak >= GY39_FAIL_STREAK) _p->thpValid = false;
+        Serial.println(F("[gy39] BME280 读取失败/超物理范围"));
+      } else {
+        _p->temp = t;
+        _p->hum = h;
+        _p->pressPa = (unsigned long)pa;
+        _p->failStreak = 0;
+        _p->thpValid = true;
+      }
+    }
+
+    // 光照（MAX44009，独立失败计数，不影响温湿压）
+    if (maxAlive) {
+      float l;
+      if (_p->readMax(l)) {
+        _p->lux = l;
+        _p->luxValid = true;
+        _p->luxFail = 0;
+      } else if (++_p->luxFail >= GY39_FAIL_STREAK) {
+        _p->luxValid = false;
+      }
+    }
+
+    if (_p->thpValid || _p->luxValid) {
+      Serial.print(F("[gy39] "));
+      if (_p->thpValid) {
+        Serial.print(F("T="));
+        Serial.print(_p->temp, 1);
+        Serial.print(F("C H="));
+        Serial.print(_p->hum, 1);
+        Serial.print(F("% P="));
+        Serial.print((unsigned)(_p->pressPa / 100UL));
+        Serial.print(F("hPa "));
+      }
+      if (_p->luxValid) {
+        Serial.print(F("L="));
+        Serial.print(_p->lux, 0);
+        Serial.print(F("lux"));
+      }
+      Serial.println();
     }
     return;
   }
