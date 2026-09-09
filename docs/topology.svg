@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 930" width="1160" height="930" role="img" aria-label="sandbox-solution 预期完整拓扑：用户浏览器经 HTTP 访问 esp32-1 主机控制台；主机经 UDP 45555 广播宣告供从机动态发现；F8266-x 从机作为 TCP 客户端连入主机 8000~8005 端口；esp8266-1 为独立演示节点">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 930" width="1160" height="930" role="img" aria-label="sandbox-solution 预期完整拓扑：用户浏览器经 HTTP 访问现行 esp32-2 主机控制台；主机经 UDP 45555 广播宣告供从机动态发现；F8266-x 从机作为 TCP 客户端连入主机 8000~8005 端口；esp8266-1 为独立演示节点">
   <title>sandbox-solution 预期完整拓扑</title>
-  <desc>主从式沙盘控制系统拓扑：① 用户层（浏览器）→ ② 主机 esp32-1（控制面 HTTP :80 / 发现面 UDP :45555 / 数据面 TCP :8000~8005）→ ③ 从机层 F8266-1~6（一从机一端口；F8266-1 已上线，F8266-2 已克隆编译通过待上板，3~6 预留）；④ esp8266-1 独立岛不入主从架构。</desc>
+  <desc>主从式沙盘控制系统拓扑：① 用户层（浏览器）→ ② 主机 esp32-2 现行（esp32-1 备份，控制面 HTTP :80 / 发现面 UDP :45555 / 数据面 TCP :8000~8005）→ ③ 从机层 F8266-1~6（一从机一端口；F8266-1 智慧农场 5 传感+执行器已上线，F8266-2 差异化气象节点已上线联调通过，3~6 预留）；④ esp8266-1 独立岛不入主从架构。</desc>
   <style>
     svg {
       --surface: #fcfcfb;
@@ -70,7 +70,7 @@
 
   <!-- 标题 -->
   <text class="t-title" x="580" y="34" text-anchor="middle">sandbox-solution 预期完整拓扑</text>
-  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 1 主机 + 6 从机位 + 浏览器控制台 · 进度基线 2026-09-08</text>
+  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 现行主机 esp32-2（esp32-1 备份）+ 6 从机位 + 浏览器控制台 · 进度基线 2026-09-09</text>
 
   <!-- ① 用户层 -->
   <rect class="node" x="380" y="82" width="400" height="52" rx="10" />
@@ -80,7 +80,7 @@
   <!-- 控制面：用户 → 主机 -->
   <path class="ln l-http" d="M580,134 L580,224" marker-end="url(#ah-http)" />
   <text class="t-body" x="594" y="168">控制面 HTTP :80</text>
-  <text class="t-small" x="594" y="184">接口 /api/status · /api/ports · /api/send · mDNS esp32s3.local</text>
+  <text class="t-small" x="594" y="184">接口 /api/status · /api/ports · /api/send · mDNS esp32s3-2.local</text>
 
   <!-- 局域网边界 -->
   <rect class="lane-box" x="70" y="196" width="1020" height="540" rx="14" />
@@ -88,13 +88,13 @@
 
   <!-- ② 主机 -->
   <rect class="node" x="250" y="228" width="660" height="170" rx="10" />
-  <text class="t-box" x="270" y="252">② 主机 esp32-1 · 4D Systems gen4-ESP32S3 (R8N16)</text>
-  <circle class="dot-good" cx="844" cy="248" r="5" />
-  <text class="t-chip" x="856" y="252">已实现</text>
-  <text class="t-body" x="270" y="278">网页控制台 :80（精简状态卡 + 2×3 端口收发窗）· keepalive ≈5~10s 判从机异常掉电</text>
-  <text class="t-body" x="270" y="300">兜底：STA 120s 连不上路由器 → 热点 ESP32-Direct（192.168.4.1，终态，重启回 STA）</text>
-  <text class="t-body" x="270" y="322">发现面：UDP :45555 每 3s 广播 ESP32HOST,ip,8000,6（仅 STA 在线时）</text>
-  <text class="t-body" x="270" y="344">数据面：TCP :8000~:8005 六路从机端口 · @内容/ 帧 ≤64 字符 · 每口 ≤3 连接</text>
+  <text class="t-box" x="270" y="252">② 主机 esp32-2（现行）· esp32-1（备份）</text>
+  <circle class="dot-good" cx="872" cy="248" r="5" />
+  <text class="t-chip" x="884" y="252">现行</text>
+  <text class="t-body" x="270" y="278">4D Systems gen4-ESP32S3 (R8N16) · esp32-2 网页 v2 仪表盘 :80（六从机总览/详情/自动控制）</text>
+  <text class="t-body" x="270" y="300">esp32-1 备份为网页 v1（auto_ctrl 单实例）· keepalive ≈5~10s 判从机掉电</text>
+  <text class="t-body" x="270" y="322">兜底：STA 120s 连不上路由器 → 热点 ESP32-Direct-2（esp32-2 现行）/ ESP32-Direct（esp32-1 备份）</text>
+  <text class="t-body" x="270" y="344">发现面：UDP :45555 每 3s 广播 · 数据面：TCP :8000~:8005 六路从机端口 · 帧 ≤128 字符 · 每口 ≤3 连接</text>
   <text class="t-body" x="270" y="366">从机掉电不发 FIN，主机端 lwIP keepalive（空闲 3s + 2s×3 次探测）判离线</text>
 
   <!-- 端口标签（与下方从机列中心对齐） -->
@@ -135,9 +135,9 @@
     <circle class="dot-good" cx="148" cy="576" r="4" />
     <text class="t-chip" x="159" y="580">已实现</text>
     <text class="t-small" x="170" y="600" text-anchor="middle">智慧农场状态节点</text>
-    <text class="t-small" x="170" y="616" text-anchor="middle">4 传感子系统已接入</text>
-    <text class="t-small" x="170" y="632" text-anchor="middle">SHT30·BH1750·MQ2·土壤</text>
-    <text class="t-small" x="170" y="648" text-anchor="middle">OLED 信息区 4 行满员</text>
+    <text class="t-small" x="170" y="616" text-anchor="middle">5 传感子系统 + 执行器已接入</text>
+    <text class="t-small" x="170" y="632" text-anchor="middle">SHT30·BH1750·MQ2·土壤·SGP30</text>
+    <text class="t-small" x="170" y="648" text-anchor="middle">泵/风扇/舵机 · OLED 6 行</text>
   </g>
   <g>
     <rect class="node" x="264" y="536" width="140" height="140" rx="10" />
@@ -145,7 +145,7 @@
     <circle class="dot-good" cx="313" cy="576" r="4" />
     <text class="t-chip" x="324" y="580">已实现</text>
     <text class="t-small" x="334" y="600" text-anchor="middle">差异化气象节点</text>
-    <text class="t-small" x="334" y="616" text-anchor="middle">GY-39 直连 · 土壤 AO · 无 MQ-2</text>
+    <text class="t-small" x="334" y="616" text-anchor="middle">GY-39 直连 · 土壤 AO · SGP30</text>
     <text class="t-small" x="334" y="632" text-anchor="middle">端口 8001 · 联调通过</text>
   </g>
   <g>
@@ -202,6 +202,6 @@
   <text class="t-chip" x="114" y="906">已实现</text>
   <rect class="node plan" x="196" y="894" width="14" height="14" rx="3" />
   <text class="t-chip" x="218" y="906">规划（端口已预留）</text>
-  <circle class="dot-wait" cx="403" cy="902" r="5" />
-  <text class="t-chip" x="414" y="906">待上板（已克隆 · 编译通过）</text>
+  <circle class="dot-good" cx="403" cy="902" r="5" />
+  <text class="t-chip" x="414" y="906">现行主机 esp32-2（esp32-1 备份）</text>
 </svg>
