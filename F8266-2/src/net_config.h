@@ -46,6 +46,3 @@
 // 接板上 SDA/SCL 排针。
 #define PERIPH_I2C_SDA 4   // 板上 SDA（GPIO4）
 #define PERIPH_I2C_SCL 5   // 板上 SCL（GPIO5）
-// GY-39 UART 模式接收脚（出厂默认模式免焊接线：模块 CT(=TX)→此脚，DR 不接）。
-// 土壤湿度改 AO→A0 后 GPIO14 空闲；避开 boot 约束脚 0/2/15。
-#define PERIPH_GY39_UART_RX 14  // GPIO14
