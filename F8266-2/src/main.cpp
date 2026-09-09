@@ -50,7 +50,7 @@ static void reportSensors() {
   j += F(",\"press\":");
   j += gy39.hasData() ? String((unsigned)(gy39.getPressPa() / 100UL)) : F("null");  // hPa
   j += F(",\"lux\":");
-  j += gy39.hasData() ? String((unsigned)gy39.getLux()) : F("null");
+  j += gy39.hasLux() ? String((unsigned)gy39.getLux()) : F("null");
   j += F(",\"soil\":");
   j += soil.isMoist() ? '1' : '0';           // 土壤数字量始终有值（1=湿润 0=过干）
   j += F(",\"co2\":");
@@ -157,15 +157,19 @@ void loop() {
       oled.setInfoLine(0, line);
     }
 
-    // 行 1：GY-39 光照 + 气压（气象二合一之二）
+    // 行 1：GY-39 光照 + 气压（气象二合一之二；光照与温湿压独立跟踪有效性）
     if (!gy39.isOk()) {
       oled.setInfoLine(1, F("GY39 ERR"));
-    } else if (!gy39.hasData()) {
+    } else if (!gy39.hasLux() && !gy39.hasData()) {
       oled.setInfoLine(1, F("GY39 ..."));     // 已检测到，等待首次读数
     } else {
-      char line[24];
-      snprintf(line, sizeof(line), "L:%.0flux P:%luh",
-               gy39.getLux(), (unsigned long)(gy39.getPressPa() / 100UL));
+      char luxPart[12], pPart[12], line[24];
+      if (gy39.hasLux()) snprintf(luxPart, sizeof(luxPart), "L:%.0flux", gy39.getLux());
+      else               snprintf(luxPart, sizeof(luxPart), "L:--");
+      if (gy39.hasData()) snprintf(pPart, sizeof(pPart), "P:%luh",
+                                   (unsigned long)(gy39.getPressPa() / 100UL));
+      else                snprintf(pPart, sizeof(pPart), "P:--");
+      snprintf(line, sizeof(line), "%s %s", luxPart, pPart);
       oled.setInfoLine(1, line);
     }
 

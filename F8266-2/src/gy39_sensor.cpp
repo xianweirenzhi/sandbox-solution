@@ -1,29 +1,73 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>   // ESP8266 核心自带（EspSoftwareSerial），GY-39 UART 模式接收
 
-#include "net_config.h"   // PERIPH_I2C_SDA / PERIPH_I2C_SCL
+#include "net_config.h"   // PERIPH_I2C_SDA / PERIPH_I2C_SCL / PERIPH_GY39_UART_RX
 #include "gy39_sensor.h"
 
 // ===================== 采集参数（改地址/周期只动这里）=====================
 #define GY39_I2C_ADDR    0x5B     // GY-39 I2C 模式 7 位地址（MCU_IIC，S0 焊桥接 GND）
-#define GY39_READ_MS     2000UL   // 采集周期（毫秒；模块内部 ~10Hz 刷新，只管按需读）
+#define GY39_READ_MS     2000UL   // 采集周期（毫秒；UART 帧约 1s 一发，按需取用）
 #define GY39_FAIL_STREAK 3        // 连续失败 N 次判定传感器故障
 #define GY39_RESCAN_MS   10000UL  // 未检测到传感器时的重扫周期（热插拔自愈）
-#define GY39_REG_DATA    14       // 数据寄存器长度（0x00~0x0D）
+#define GY39_REG_DATA    14       // I2C 数据寄存器长度（0x00~0x0D）
+#define GY39_UART_BAUD   9600     // UART 模式波特率（手册默认；另一档 115200）
+#define GY39_UART_ALIVE_MS   6000UL   // UART 帧流存活窗口（超此无有效帧计一次失败）
+#define GY39_UART_DROP_MS  30000UL   // UART 帧流停止此时长降级回探测（支持换接线）
+
+// ===================== 内部小工具 =====================
+
+// 全总线扫描并打印应答的设备地址（仅在 I2C 探测失败时调用一次，辅助现场排障）
+static void scanBus() {
+  Serial.print(F("[gy39] I2C 总线扫描："));
+  uint8_t found = 0;
+  for (uint8_t a = 1; a < 127; a++) {
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0) {
+      Serial.print(F("0x"));
+      Serial.print(a, HEX);
+      // 已知地址标注归属，其余打印原始地址
+      if (a == 0x3C)      Serial.print(F("(OLED)"));
+      else if (a == 0x58) Serial.print(F("(SGP30)"));
+      else if (a == 0x5B) Serial.print(F("(GY39)"));
+      else if (a == 0x4A) Serial.print(F("(MAX44009?)"));
+      else if (a == 0x76 || a == 0x77) Serial.print(F("(BME280?)"));
+      Serial.print(' ');
+      found++;
+    }
+  }
+  if (found == 0) Serial.println(F("无设备应答（查 VCC/GND/SDA/SCL）"));
+  else Serial.println();
+}
 
 // ===================== 实现体 =====================
 struct Gy39Sensor::Impl {
-  bool     present = false;    // 总线上是否检测到模块
-  bool     dataValid = false;  // 是否有可信读数
-  float    temp = 0.0f;        // 最近一次有效温度（°C）
-  float    hum = 0.0f;         // 最近一次有效湿度（%RH）
-  unsigned long pressPa = 0;   // 最近一次有效大气压（Pa）
-  float    lux = 0.0f;         // 最近一次有效光照（lux）
-  uint8_t  failStreak = 0;     // 连续读取失败计数（成功清零）
-  uint8_t  style = 0;          // 读事务样式（0=A/B=C 记忆成功样式，见 readRegs）
-  uint8_t  verboseLeft = 6;    // 剩余详细失败打印配额（限噪）
-  uint32_t lastReadMs = 0;     // 上次采集时刻（限频用）
-  uint32_t lastScanMs = 0;     // 上次重扫时刻（未在总线时用）
+  // ---- 公共状态 ----
+  uint8_t  mode = 0;             // 0=未检测到 1=I2C(0x5B) 2=UART
+  bool     thpValid = false;     // 温/湿/气压有效
+  bool     luxValid = false;     // 光照有效
+  float    temp = 0.0f;          // 最近一次有效温度（°C）
+  float    hum = 0.0f;           // 最近一次有效湿度（%RH）
+  unsigned long pressPa = 0;     // 最近一次有效大气压（Pa）
+  float    lux = 0.0f;           // 最近一次有效光照（lux）
+  uint8_t  failStreak = 0;       // 连续失败计数（成功清零）
+  uint32_t lastReadMs = 0;       // 上次采集/健康检查时刻（限频用）
+  uint32_t lastScanMs = 0;       // 上次重扫时刻（未在总线时用）
+
+  // ---- I2C（0x5B）读事务三样式 ----
+  uint8_t  style = 0;            // 0=A/B=C 记忆成功样式，见 readRegs
+  uint8_t  verboseLeft = 6;      // 剩余详细失败打印配额（限噪）
+
+  // ---- UART 帧解析状态机 ----
+  SoftwareSerial uart;           // 仅收不发（TX 引脚 -1）
+  uint8_t  uState = 0;           // 0=等5A① 1=等5A② 2=type 3=len 4=data 5=校验
+  uint8_t  uType = 0;
+  uint8_t  uLen = 0;
+  uint8_t  uIdx = 0;
+  uint8_t  uBuf[12];             // 数据域缓冲（0x45 帧 len=10）
+  uint32_t lastFrameMs = 0;      // 最近一次校验通过帧的时刻
+
+  Impl() : uart(PERIPH_GY39_UART_RX, -1) {}
 
   // 大端读取：buf 起的 n 字节拼为无符号整数（n ≤ 4）
   static unsigned long beGet(const uint8_t *buf, uint8_t n) {
@@ -32,13 +76,19 @@ struct Gy39Sensor::Impl {
     return v;
   }
 
-  // 探测总线上是否有模块（地址 ACK 即认为在）
-  bool probe() {
+  // 读数合理性（超物理范围视为异常，不污染缓存值）
+  static bool sane(float t, float h, unsigned long pa) {
+    return t >= -40.0f && t <= 85.0f && h >= 0.0f && h <= 100.0f &&
+           pa >= 30000UL && pa <= 120000UL;
+  }
+
+  // 探测总线上是否有模块（I2C 地址 ACK 即认为在）
+  bool probeI2c() {
     Wire.beginTransmission(GY39_I2C_ADDR);
     return Wire.endTransmission() == 0;
   }
 
-  // 单个样式尝试：true = 14 字节全部到手
+  // ---- I2C 单个样式尝试：true = 14 字节全部到手 ----
   // rc（endTransmission 返回码）：2=NACK 地址 / 3=NACK 数据 / 4=其他（含时钟拉伸超时）
   bool tryStyle(uint8_t s, uint8_t *out) {
     if (s != 2) {                              // 样式 A/B：先写寄存器指针 0x00
@@ -66,7 +116,7 @@ struct Gy39Sensor::Impl {
     return true;
   }
 
-  // 读 0x00 起 14 字节数据寄存器；失败返回 false。
+  // I2C 读 0x00 起 14 字节数据寄存器；失败返回 false。
   // 模块 MCU 的 I2C 从机实现存在个体差异，按 A→B→C 轮换尝试并记住成功样式：
   //   A = 写指针 + repeated start（标准读法）
   //   B = 写指针 + STOP 再读（部分固件不支持 repeated start）
@@ -85,35 +135,44 @@ struct Gy39Sensor::Impl {
     }
     return false;
   }
-};
 
-// ===================== 内部小工具 =====================
-
-// 全总线扫描并打印应答的设备地址（仅在 GY-39 探测失败时调用一次，辅助现场排障）
-static void scanBus() {
-  Serial.print(F("[gy39] I2C 总线扫描："));
-  uint8_t found = 0;
-  for (uint8_t a = 1; a < 127; a++) {
-    Wire.beginTransmission(a);
-    if (Wire.endTransmission() == 0) {
-      Serial.print(F("0x"));
-      Serial.print(a, HEX);
-      // 已知地址标注归属，其余打印原始地址
-      if (a == 0x3C)      Serial.print(F("(OLED)"));
-      else if (a == 0x58) Serial.print(F("(SGP30)"));
-      else if (a == 0x5B) Serial.print(F("(GY39)"));
-      else if (a == 0x4A) Serial.print(F("(MAX44009?)"));
-      else if (a == 0x76 || a == 0x77) Serial.print(F("(BME280?)"));
-      Serial.print(' ');
-      found++;
+  // ---- UART：排空接收缓冲喂给帧状态机（每次 handle 调用）----
+  void pumpUart() {
+    while (uart.available() > 0) {
+      uint8_t b = (uint8_t)uart.read();
+      switch (uState) {
+        case 0: if (b == 0x5A) uState = 1; break;
+        case 1: if (b == 0x5A) uState = 2; else uState = 0; break;
+        case 2: uType = b; uState = 3; break;
+        case 3: uLen = b; uIdx = 0;
+                uState = (uLen >= 1 && uLen <= sizeof(uBuf)) ? 4 : 0; break;
+        case 4: uBuf[uIdx++] = b;
+                if (uIdx == uLen) uState = 5; break;
+        case 5: {  // 校验：帧头到数据最后一字节累加和低 8 位
+                uint8_t sum = 0x5A + 0x5A + uType + uLen;
+                for (uint8_t i = 0; i < uLen; i++) sum += uBuf[i];
+                if (sum == b) onFrame();
+                uState = 0;
+                } break;
+      }
     }
   }
-  if (found == 0) Serial.println(F("无设备应答（查 VCC/GND/SDA/SCL）"));
-  else Serial.println();
-  // 结果解读：见 0x5B → 模块已在总线（另查寄存器读取）；见 0x4A/0x76/0x77 →
-  // S1 被接 GND（直连芯片模式），0x5B 不会出现，应恢复 S1 默认；只有 OLED/SGP30 →
-  // GY-39 未应答，多为 S0 未接 GND（UART 模式）或 CT/DR 接反。
-}
+
+  // 校验通过的帧分发（手册数据布局，大端 /100）
+  void onFrame() {
+    lastFrameMs = millis();
+    if (uType == 0x15 && uLen >= 4) {            // 光照帧：lux 4B
+      float l = beGet(uBuf, 4) / 100.0f;
+      if (l <= 200000.0f) { lux = l; luxValid = true; }
+    } else if (uType == 0x45 && uLen >= 10) {    // 气象帧：T2 P4 H2 Alt2(不用)
+      float t = (float)(int16_t)beGet(uBuf, 2) / 100.0f;
+      unsigned long pa = beGet(uBuf + 2, 4) / 100UL;
+      float h = beGet(uBuf + 6, 2) / 100.0f;
+      if (sane(t, h, pa)) { temp = t; hum = h; pressPa = pa; thpValid = true; }
+    }
+    // 未知类型帧：仅刷新存活时刻（校验通过即为有效帧流）
+  }
+};
 
 // ===================== 公开接口 =====================
 
@@ -125,28 +184,21 @@ Gy39Sensor::~Gy39Sensor() {
 }
 
 bool Gy39Sensor::isOk() const {
-  return _p->present && _p->failStreak < GY39_FAIL_STREAK;
+  return _p->mode != 0 && _p->failStreak < GY39_FAIL_STREAK;
 }
 
 bool Gy39Sensor::hasData() const {
-  return _p->dataValid;
+  return _p->thpValid;
 }
 
-float Gy39Sensor::getTempC() const {
-  return _p->temp;
+bool Gy39Sensor::hasLux() const {
+  return _p->luxValid;
 }
 
-float Gy39Sensor::getHumRH() const {
-  return _p->hum;
-}
-
-unsigned long Gy39Sensor::getPressPa() const {
-  return _p->pressPa;
-}
-
-float Gy39Sensor::getLux() const {
-  return _p->lux;
-}
+float Gy39Sensor::getTempC() const { return _p->temp; }
+float Gy39Sensor::getHumRH() const { return _p->hum; }
+unsigned long Gy39Sensor::getPressPa() const { return _p->pressPa; }
+float Gy39Sensor::getLux() const { return _p->lux; }
 
 bool Gy39Sensor::begin() {
   // 与 OLED 共用同一条 I2C；同参数重复 begin 无害（各自模块独立初始化总线）
@@ -155,45 +207,84 @@ bool Gy39Sensor::begin() {
   // 只容忍 230µs，超时整笔判失败（地址探测事务短反而能过）。放宽到 3ms，
   // 对 OLED/SGP30 等不拉伸的设备无影响（仅为超时上限，不是主动等待）。
   Wire.setClockStretchLimit(3000);
-  _p->present = _p->probe();
+
+  // UART 常开监听（出厂默认模式免焊接线即可用；与 I2C 探测并行自适应）
+  _p->uart.begin(GY39_UART_BAUD);
+
   // 让 handle 首轮即可进入扫描/采集节奏
   _p->lastScanMs = millis() - GY39_RESCAN_MS;
   _p->lastReadMs = millis() - GY39_READ_MS;
 
-  if (_p->present) {
-    Serial.println(F("[gy39] GY-39 已检测到（0x5B，I2C 模式）"));
+  if (_p->probeI2c()) {
+    _p->mode = 1;
+    Serial.println(F("[gy39] GY-39 已检测到（I2C 0x5B 模式）"));
   } else {
-    Serial.println(F("[gy39] 未检测到 GY-39（检查接线/地址），将周期重扫"));
-    Serial.println(F("[gy39] 提示：模块须为 I2C 模式（S0 焊桥接 GND），CT=SCL、DR=SDA"));
-    scanBus();   // 打印总线上实际应答的设备，辅助定位（S0 模式/接线/接反）
+    Serial.println(F("[gy39] 未检测到 GY-39 I2C（0x5B），并行监听 UART（GPIO14）"));
+    Serial.println(F("[gy39] 接线二选一：UART 免焊（CT→GPIO14，出厂默认模式）"));
+    Serial.println(F("[gy39]           I2C（S0 焊桥接 GND，CT→SCL、DR→SDA）"));
+    scanBus();   // 打印总线上实际应答的设备，辅助定位
   }
-  return _p->present;
+  return true;
 }
 
 void Gy39Sensor::handle() {
-  // 1) 不在总线上：周期重扫（支持上电后才接线的热插拔自愈）
-  if (!_p->present) {
-    uint32_t now = millis();
+  uint32_t now = millis();
+
+  if (_p->mode == 0) {
+    // ---- 未上线：UART 帧流提升 + 周期 I2C 重扫，哪边先来用哪边 ----
+    _p->pumpUart();
+    if (_p->lastFrameMs != 0 && now - _p->lastFrameMs < GY39_UART_ALIVE_MS) {
+      _p->mode = 2;
+      _p->failStreak = 0;
+      Serial.println(F("[gy39] 检测到 GY-39 UART 帧流（CT→GPIO14），采用 UART 模式"));
+      return;
+    }
     if (now - _p->lastScanMs >= GY39_RESCAN_MS) {
       _p->lastScanMs = now;
-      _p->present = _p->probe();
-      if (_p->present) {
+      if (_p->probeI2c()) {
+        _p->mode = 1;
         _p->failStreak = 0;
-        Serial.println(F("[gy39] GY-39 重扫发现模块，恢复采集"));
+        Serial.println(F("[gy39] 重扫发现 GY-39（I2C 0x5B），恢复采集"));
       }
     }
     return;
   }
 
-  // 2) 在总线：按周期采集
-  uint32_t now = millis();
+  if (_p->mode == 2) {
+    // ---- UART 模式：持续解析；按周期做健康检查 ----
+    _p->pumpUart();
+    if (now - _p->lastFrameMs >= GY39_UART_DROP_MS) {
+      // 帧流停止过久（换接线/拔线）：降级回探测，支持热切换
+      _p->mode = 0;
+      _p->thpValid = _p->luxValid = false;
+      _p->lastScanMs = now;
+      _p->lastFrameMs = 0;
+      Serial.println(F("[gy39] UART 帧流超时，回到探测（I2C 重扫 + UART 监听）"));
+      return;
+    }
+    if (now - _p->lastReadMs < GY39_READ_MS) return;
+    _p->lastReadMs = now;
+    if (now - _p->lastFrameMs < GY39_UART_ALIVE_MS) {
+      if (_p->failStreak) Serial.println(F("[gy39] UART 帧流恢复"));
+      _p->failStreak = 0;
+    } else {
+      _p->failStreak++;
+      if (_p->failStreak >= GY39_FAIL_STREAK) { _p->thpValid = _p->luxValid = false; }
+      Serial.print(F("[gy39] UART 无有效帧（连续 "));
+      Serial.print(_p->failStreak);
+      Serial.println(F(" 个检查周期）"));
+    }
+    return;
+  }
+
+  // ---- I2C 模式：按周期采集 ----
   if (now - _p->lastReadMs < GY39_READ_MS) return;
   _p->lastReadMs = now;
 
   uint8_t r[GY39_REG_DATA];
   if (!_p->readRegs(r)) {
     _p->failStreak++;
-    if (_p->failStreak >= GY39_FAIL_STREAK) _p->dataValid = false;
+    if (_p->failStreak >= GY39_FAIL_STREAK) { _p->thpValid = _p->luxValid = false; }
     Serial.print(F("[gy39] 读取失败（连续 "));
     Serial.print(_p->failStreak);
     Serial.println(F(" 次）"));
@@ -207,11 +298,9 @@ void Gy39Sensor::handle() {
   float         hum = Impl::beGet(r + 10, 2) / 100.0f;
   float         lux = Impl::beGet(r + 0, 4) / 100.0f;
 
-  // 读数合理性：超物理范围视为总线毛刺/异常帧（计失败，不污染缓存值）
-  if (t < -40.0f || t > 85.0f || hum < 0.0f || hum > 100.0f ||
-      pa < 30000UL || pa > 120000UL || lux < 0.0f || lux > 200000.0f) {
+  if (!Impl::sane(t, hum, pa) || lux > 200000.0f) {
     _p->failStreak++;
-    if (_p->failStreak >= GY39_FAIL_STREAK) _p->dataValid = false;
+    if (_p->failStreak >= GY39_FAIL_STREAK) { _p->thpValid = _p->luxValid = false; }
     Serial.println(F("[gy39] 读数超物理范围，按失败处理"));
     return;
   }
@@ -221,7 +310,7 @@ void Gy39Sensor::handle() {
   _p->pressPa = pa;
   _p->lux = lux;
   _p->failStreak = 0;
-  _p->dataValid = true;
+  _p->thpValid = _p->luxValid = true;
   Serial.print(F("[gy39] T="));
   Serial.print(t, 1);
   Serial.print(F("C H="));
