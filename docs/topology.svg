@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 930" width="1160" height="930" role="img" aria-label="sandbox-solution 预期完整拓扑：用户浏览器经 HTTP 访问现行 esp32-2 主机控制台；主机经 UDP 45555 广播宣告供从机动态发现；F8266-x 从机作为 TCP 客户端连入主机 8000~8005 端口；esp8266-1 为独立演示节点">
   <title>sandbox-solution 预期完整拓扑</title>
-  <desc>主从式沙盘控制系统拓扑：① 用户层（浏览器）→ ② 主机 esp32-2 现行（esp32-1 备份，控制面 HTTP :80 / 发现面 UDP :45555 / 数据面 TCP :8000~8005）→ ③ 从机层 F8266-1~6（一从机一端口；F8266-1 智慧农场 5 传感+执行器已上线，F8266-2 差异化气象节点已上线联调通过，3~6 预留）；④ esp8266-1 独立岛不入主从架构。</desc>
+  <desc>主从式沙盘控制系统拓扑：① 用户层（浏览器）→ ② 主机 esp32-2 现行（esp32-1 备份，控制面 HTTP :80 / 发现面 UDP :45555 / 数据面 TCP :8000~8005）→ ③ 从机层 F8266-1~6（一从机一端口；F8266-1 智慧农场 5 传感+执行器已上线，F8266-2 差异化气象节点已上线联调通过，3~6 已由 F8266-2 同构克隆、固件就绪待上板）；④ esp8266-1 独立岛不入主从架构。</desc>
   <style>
     svg {
       --surface: #fcfcfb;
@@ -70,7 +70,7 @@
 
   <!-- 标题 -->
   <text class="t-title" x="580" y="34" text-anchor="middle">sandbox-solution 预期完整拓扑</text>
-  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 现行主机 esp32-2（esp32-1 备份）+ 6 从机位 + 浏览器控制台 · 进度基线 2026-09-09</text>
+  <text class="t-sub" x="580" y="56" text-anchor="middle">主从式沙盘控制系统 · 现行主机 esp32-2（esp32-1 备份）+ 6 从机位 + 浏览器控制台 · 进度基线 2026-09-10</text>
 
   <!-- ① 用户层 -->
   <rect class="node" x="380" y="82" width="400" height="52" rx="10" />
@@ -149,36 +149,36 @@
     <text class="t-small" x="334" y="632" text-anchor="middle">端口 8001 · 联调通过</text>
   </g>
   <g>
-    <rect class="node plan" x="428" y="536" width="140" height="140" rx="10" />
+    <rect class="node" x="428" y="536" width="140" height="140" rx="10" />
     <text class="t-box" x="498" y="560" text-anchor="middle">F8266-3</text>
-    <rect x="475" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
-    <text class="t-chip" x="490" y="580">规划</text>
-    <text class="t-small" x="498" y="600" text-anchor="middle">端口已预留</text>
-    <text class="t-small" x="498" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+    <circle class="dot-wait" cx="462" cy="576" r="4" />
+    <text class="t-chip" x="473" y="580">固件就绪</text>
+    <text class="t-small" x="498" y="600" text-anchor="middle">F8266-2 同构克隆</text>
+    <text class="t-small" x="498" y="616" text-anchor="middle">端口 8002 · 待上板联调</text>
   </g>
   <g>
-    <rect class="node plan" x="592" y="536" width="140" height="140" rx="10" />
+    <rect class="node" x="592" y="536" width="140" height="140" rx="10" />
     <text class="t-box" x="662" y="560" text-anchor="middle">F8266-4</text>
-    <rect x="639" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
-    <text class="t-chip" x="654" y="580">规划</text>
-    <text class="t-small" x="662" y="600" text-anchor="middle">端口已预留</text>
-    <text class="t-small" x="662" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+    <circle class="dot-wait" cx="626" cy="576" r="4" />
+    <text class="t-chip" x="637" y="580">固件就绪</text>
+    <text class="t-small" x="662" y="600" text-anchor="middle">F8266-2 同构克隆</text>
+    <text class="t-small" x="662" y="616" text-anchor="middle">端口 8003 · 待上板联调</text>
   </g>
   <g>
-    <rect class="node plan" x="756" y="536" width="140" height="140" rx="10" />
+    <rect class="node" x="756" y="536" width="140" height="140" rx="10" />
     <text class="t-box" x="826" y="560" text-anchor="middle">F8266-5</text>
-    <rect x="803" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
-    <text class="t-chip" x="818" y="580">规划</text>
-    <text class="t-small" x="826" y="600" text-anchor="middle">端口已预留</text>
-    <text class="t-small" x="826" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+    <circle class="dot-wait" cx="790" cy="576" r="4" />
+    <text class="t-chip" x="801" y="580">固件就绪</text>
+    <text class="t-small" x="826" y="600" text-anchor="middle">F8266-2 同构克隆</text>
+    <text class="t-small" x="826" y="616" text-anchor="middle">端口 8004 · 待上板联调</text>
   </g>
   <g>
-    <rect class="node plan" x="920" y="536" width="140" height="140" rx="10" />
+    <rect class="node" x="920" y="536" width="140" height="140" rx="10" />
     <text class="t-box" x="990" y="560" text-anchor="middle">F8266-6</text>
-    <rect x="967" y="571" width="9" height="9" rx="2" fill="none" stroke="#898781" stroke-width="1.2" stroke-dasharray="3 2" />
-    <text class="t-chip" x="982" y="580">规划</text>
-    <text class="t-small" x="990" y="600" text-anchor="middle">端口已预留</text>
-    <text class="t-small" x="990" y="616" text-anchor="middle">复制 F8266-1 扩展</text>
+    <circle class="dot-wait" cx="954" cy="576" r="4" />
+    <text class="t-chip" x="965" y="580">固件就绪</text>
+    <text class="t-small" x="990" y="600" text-anchor="middle">F8266-2 同构克隆</text>
+    <text class="t-small" x="990" y="616" text-anchor="middle">端口 8005 · 待上板联调</text>
   </g>
   <text class="t-small" x="580" y="700" text-anchor="middle">③ 从机层 F8266-x ×6 · 一从机一端口 · 每台三层：wifi_net 联网（直连 + 配置热点兜底 + 断线自愈）→ host_link 通信（UDP 发现 + TCP + 断线重连）→ 业务层（onHostCommand 命令执行 / OLED 状态屏）</text>
   <text class="t-small" x="580" y="718" text-anchor="middle">板卡：Adafruit HUZZAH ESP8266 · 配置热点同名 F8266-x（192.168.4.1，180s 无人配置自动重启重试）</text>
@@ -200,8 +200,8 @@
   <text class="t-chip" x="776" y="878">发现面 UDP :45555 · 主机 → 全网广播</text>
   <circle class="dot-good" cx="103" cy="902" r="5" />
   <text class="t-chip" x="114" y="906">已实现</text>
-  <rect class="node plan" x="196" y="894" width="14" height="14" rx="3" />
-  <text class="t-chip" x="218" y="906">规划（端口已预留）</text>
+  <circle class="dot-wait" cx="203" cy="902" r="5" />
+  <text class="t-chip" x="214" y="906">固件就绪待上板</text>
   <circle class="dot-good" cx="403" cy="902" r="5" />
   <text class="t-chip" x="414" y="906">现行主机 esp32-2（esp32-1 备份）</text>
 </svg>

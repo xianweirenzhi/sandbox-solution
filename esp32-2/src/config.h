@@ -67,9 +67,10 @@
 
 // ---------- 土壤上报模式(按端口,索引=端口序号 0~PORT_COUNT-1) ----------
 // false=数字两态:从机上报 0=干 / 1=湿(如 F8266-1 数字 DO 模块);
-// true=原始值:从机上报滤波后 ADC 原始值 0~1023,低=湿 高=干(如 F8266-2 模拟 AO),
-//     此模式下土壤浇水规则用 AC_SOIL_WET/AC_SOIL_DRY(网页可调),网页土壤卡显示数值。
-constexpr bool PORT_SOIL_RAW[PORT_COUNT] = {false, true, false, false, false, false};
+// true=原始值:从机上报滤波后 ADC 原始值 0~1023,低=湿 高=干(如 F8266-2 及其同构克隆
+//     F8266-3~6 模拟 AO),此模式下土壤浇水规则用 AC_SOIL_WET/AC_SOIL_DRY(网页可调),
+//     网页土壤卡显示数值。
+constexpr bool PORT_SOIL_RAW[PORT_COUNT] = {false, true, true, true, true, true};
 
 // ---------- AP 兜底模式(路由器不可用时手机直连设备) ----------
 // 与 esp32-1 同网部署时以热点名/mDNS 名区分身份,避免冲突
