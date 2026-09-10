@@ -72,7 +72,7 @@ static void parseData(PortCtx &p, const String &cmd) {
   p.t    = doc["t"].is<float>()    ? doc["t"].as<float>()    : NAN;
   p.h    = doc["h"].is<float>()    ? doc["h"].as<float>()    : NAN;
   p.lux  = doc["lux"].is<float>()  ? doc["lux"].as<float>()  : NAN;
-  p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;
+  p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;  // 两态 0/1 或百分比 0~100,按端口模式区分(PORT_SOIL_PCT)
   p.co2  = doc["co2"].is<float>()  ? doc["co2"].as<float>()  : NAN;
   p.tvoc = doc["tvoc"].is<float>() ? doc["tvoc"].as<float>() : NAN;
   // 执行器状态:缺失字段保留旧值(旧固件兼容)

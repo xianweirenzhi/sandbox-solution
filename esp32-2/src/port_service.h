@@ -20,7 +20,7 @@ struct PortSnapshot {
   float    t = 0.0f;             // 温度 ℃(NaN=无)
   float    h = 0.0f;             // 湿度 %(NaN=无)
   float    lux = 0.0f;           // 光照 lx(NaN=无)
-  int8_t   soil = -1;            // 土壤 -1=无 0=干 1=湿
+  int8_t   soil = -1;            // 土壤 -1=无;两态口 0=干/1=湿,百分比口 0~100 低=湿高=干(模式见 config.h PORT_SOIL_PCT)
   float    co2 = 0.0f;           // eCO₂ ppm(NaN=无)
   float    tvoc = 0.0f;          // TVOC ppb(NaN=无)
   // 从机上报的执行器实时状态

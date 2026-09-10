@@ -55,9 +55,19 @@
 #define AC_CO2_HYST    200.0f    // CO₂ 滞回 ppm(固定)
 #define AC_H_HIGH      70.0f     // 高湿触发阈值 %(风扇反转排湿)
 #define AC_H_HYST      5.0f      // 湿度滞回 %(固定)
+// 土壤浇水阈值(仅土壤百分比端口生效,见下方 PORT_SOIL_PCT;单位 %,低=湿 高=干):
+// 读数 ≥ 干阈值 → 判过干触发水泵;≤ 湿阈值 → 判湿润解除;两者之间保持(滞回)。
+#define AC_SOIL_WET    43.0f     // 湿阈值 %(≤ 此值=湿润解除浇水;由原 360/840 折算)
+#define AC_SOIL_DRY    67.0f     // 干阈值 %(≥ 此值=过干触发浇水;由原 560/840 折算)
 #define AC_OVER_PCT    20        // 大棚超阈百分比(温/CO₂/高湿任一超此百分比即开棚;固定,默认20%)
 #define AC_CONFIRM_N   3         // 连续越界/回安全区次数(约 6s,2s 一次上报)
 #define AC_SAMPLE_MS   2000UL    // 自动判断周期(与从机上报周期对齐)
+
+// ---------- 土壤上报模式(按端口,索引=端口序号 0~PORT_COUNT-1) ----------
+// false=数字两态:从机上报 0=干 / 1=湿(如 F8266-1 数字 DO 模块);
+// true=湿度百分比:从机上报 0~100,低=湿 高=干(如 F8266-2 模拟 AO),
+//     此模式下土壤浇水规则用 AC_SOIL_WET/AC_SOIL_DRY(网页可调),网页土壤卡显示数值。
+constexpr bool PORT_SOIL_PCT[PORT_COUNT] = {false, true, false, false, false, false};
 
 // ---------- AP 兜底模式(路由器不可用时手机直连设备) ----------
 // 与 esp32-1 同网部署时以热点名/mDNS 名区分身份,避免冲突

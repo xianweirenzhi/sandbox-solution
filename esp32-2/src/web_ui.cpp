@@ -156,6 +156,8 @@ footer{text-align:center;color:var(--mut);font-size:11px;margin:8px 0}
       <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇正转</span></div>
       <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇正转</span></div>
       <div class="actrow"><span class="lbl">高湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发风扇反转排湿</span></div>
+      <div class="actrow"><span class="lbl">土壤干</span><input type="number" id="ac_sd" step="1" min="0" max="100"><span class="unit">% 触发水泵浇水</span></div>
+      <div class="actrow"><span class="lbl">土壤湿</span><input type="number" id="ac_sw" step="1" min="0" max="100"><span class="unit">% 解除浇水（仅模拟量从机）</span></div>
       <div class="actrow"><button id="saveBtn" class="btn green" onclick="saveAuto()">保存阈值</button></div>
       <div id="rules"></div>
     </div>
@@ -209,6 +211,8 @@ function ghTxt(s){return s===0?'关棚':(s===180?'开棚':s+'°')}
 function metricHTML(d,m){
  if(m.soil){
   if(d.soil===null)return '<div class="mi"><div class="k">土壤</div><div class="v">--</div><div class="bar"><i style="width:0"></i></div></div>';
+  /* 百分比端口(F8266-2 模拟 AO):显数值 0~100(低=湿 高=干),超干阈值变警示 */
+  if(d.soilPct)return '<div class="mi"><div class="k">土壤</div><div class="v">'+d.soil+'<small>%</small></div><div class="bar"><i class="'+(d.soil>=d.soilDry?'warn':'')+'" style="width:'+d.soil+'%"></i></div></div>';
   return '<div class="mi"><div class="k">土壤</div><div class="v">'+(d.soil===1?'湿润':'干燥')+'</div><div class="bar"><i class="'+(d.soil===1?'ok':'warn')+'" style="width:'+(d.soil===1?100:20)+'%"></i></div></div>';
  }
  if(d[m.k]===null)return '<div class="mi"><div class="k">'+m.n+'</div><div class="v">--</div><div class="bar"><i style="width:0"></i></div></div>';
@@ -248,6 +252,7 @@ function updateDetail(){
  METRICS.forEach(m=>{
   if(m.soil){
    if(d.soil===null){q('v_soil','--');el('b_soil').style.width='0'}
+   else if(d.soilPct){q('v_soil',d.soil+'%');const b=el('b_soil');b.style.width=d.soil+'%';b.className=d.soil>=d.soilDry?'warn':''}
    else{q('v_soil',d.soil===1?'湿润':'干燥');const b=el('b_soil');b.style.width=d.soil===1?'100%':'20%';b.className=d.soil===1?'ok':'warn'}
   }else{
    const v=d[m.k];
@@ -310,8 +315,12 @@ async function refreshAuto(){
   const d=await(await fetch('/api/auto?port='+selPort())).json();
   if(!autoInited[d.port]){   // 每端口仅首次填充输入框,避免冲掉正在编辑的阈值
    el('ac_t').value=d.tHigh;el('ac_co2').value=d.co2High;el('ac_h').value=d.hHigh;
+   el('ac_sd').value=d.soilDry;el('ac_sw').value=d.soilWet;
    autoInited[d.port]=true;
   }
+  /* 土壤双阈值仅对百分比端口生效,两态口置灰禁用 */
+  const pct=PD&&PD[sel]&&PD[sel].soilPct;
+  el('ac_sd').disabled=el('ac_sw').disabled=!pct;
   const b=el('autoBtn');
   b.textContent=d.enabled?'自动':'手动';
   b.className='btn '+(d.enabled?'green':'gray');
@@ -320,7 +329,7 @@ async function refreshAuto(){
  }catch(e){}
 }
 async function saveAuto(){
- const body=new URLSearchParams({port:String(selPort()),enabled:String(el('autoBtn').textContent==='自动'),tHigh:el('ac_t').value,co2High:el('ac_co2').value,hHigh:el('ac_h').value});
+ const body=new URLSearchParams({port:String(selPort()),enabled:String(el('autoBtn').textContent==='自动'),tHigh:el('ac_t').value,co2High:el('ac_co2').value,hHigh:el('ac_h').value,soilDry:el('ac_sd').value,soilWet:el('ac_sw').value});
  try{
   const r=await(await fetch('/api/auto',{method:'POST',body:body})).json();
   if(r.ok){
@@ -467,6 +476,8 @@ static void handlePorts() {
     j += ",\"h\":" + numOrNull(s.h);
     j += ",\"lux\":" + (isnan(s.lux) ? String("null") : String((int)s.lux));
     j += ",\"soil\":" + (s.soil < 0 ? String("null") : String(s.soil));
+    j += ",\"soilPct\":" + String(PORT_SOIL_PCT[i] ? "true" : "false");   // true=百分比口(数值 0~100)
+    j += ",\"soilDry\":" + String(auto_ctrl::getConfig(i).soilDry, 0);    // 百分比口干阈值(网页警示色用)
     j += ",\"co2\":" + (isnan(s.co2) ? String("null") : String((int)s.co2));
     j += ",\"tvoc\":" + (isnan(s.tvoc) ? String("null") : String((int)s.tvoc));
     // 执行器实时状态
@@ -524,6 +535,8 @@ static void handleGetAuto() {
   j += ",\"tHigh\":" + String(c.tHigh);
   j += ",\"co2High\":" + String(c.co2High);
   j += ",\"hHigh\":" + String(c.hHigh);
+  j += ",\"soilWet\":" + String(c.soilWet);
+  j += ",\"soilDry\":" + String(c.soilDry);
   j += ",\"fanDir\":" + String(auto_ctrl::fanDir(idx));   // 0=停 1=正转 2=反转
   j += ",\"pumpActive\":" + String(auto_ctrl::pumpActive(idx) ? "true" : "false");
   j += ",\"servoActive\":" + String(auto_ctrl::servoActive(idx) ? "true" : "false");
@@ -545,7 +558,8 @@ static void handleSetAuto() {
     server.send(400, "application/json", "{\"ok\":false,\"error\":\"端口不在监听范围内\"}");
     return;
   }
-  if (!server.hasArg("tHigh") || !server.hasArg("co2High") || !server.hasArg("hHigh")) {
+  if (!server.hasArg("tHigh") || !server.hasArg("co2High") || !server.hasArg("hHigh") ||
+      !server.hasArg("soilWet") || !server.hasArg("soilDry")) {
     server.send(400, "application/json",
                 "{\"ok\":false,\"error\":\"缺少阈值参数\"}");
     return;
@@ -555,6 +569,13 @@ static void handleSetAuto() {
   c.tHigh   = server.arg("tHigh").toFloat();
   c.co2High = server.arg("co2High").toFloat();
   c.hHigh   = server.arg("hHigh").toFloat();
+  c.soilWet = server.arg("soilWet").toFloat();
+  c.soilDry = server.arg("soilDry").toFloat();
+  if (c.soilDry <= c.soilWet) {   // 干阈值须大于湿阈值,否则滞回带为负规则锁死
+    server.send(400, "application/json",
+                "{\"ok\":false,\"error\":\"土壤干阈值须大于湿阈值\"}");
+    return;
+  }
   auto_ctrl::setConfig(idx, c);
   server.send(200, "application/json", "{\"ok\":true}");
 }
