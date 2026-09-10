@@ -4,14 +4,14 @@
 #include "actuator_ctrl.h"
 
 // ===================== 引脚与极性参数（改接线只动这里）=====================
-#define PUMP_PIN      0     // 水泵驱动 IN（低电平开泵，高电平关泵，推挽主动驱动）
+#define PUMP_PIN      0     // 水泵驱动 IN（高电平开泵，低电平关泵，推挽主动驱动）
 #define FAN_FWD_PIN   13    // 风扇正转驱动 IN（低电平触发）
 #define FAN_REV_PIN   2     // 风扇反转驱动 IN（低电平触发；GPIO2 为 boot 脚上电需高，低触发设备上电默认关=安全）
 #define SERVO_PIN     12    // 舵机信号线（50Hz PWM）
 
-// 触发极性（水泵低触发·高电平关断、风扇低触发，各自独立）：
-#define PUMP_ON    LOW    // 水泵：低电平开泵
-#define PUMP_OFF   HIGH   // 水泵：高电平关泵（主动驱动，不依赖浮空/模块上拉）
+// 触发极性（水泵高触发·低电平关断、风扇低触发，各自独立）：
+#define PUMP_ON    HIGH   // 水泵：高电平开泵
+#define PUMP_OFF   LOW    // 水泵：低电平关泵（主动驱动，不依赖浮空/模块上拉）
 #define FAN_ON     LOW    // 风扇：低电平触发（开）
 #define FAN_OFF    HIGH   // 风扇：高电平停止（安全态）
 
@@ -29,7 +29,7 @@ struct ActuatorCtrl::Impl {
 // ===================== 内部小工具 =====================
 
 // 置一路驱动为关闭电平（安全态写法：先写关闭电平再切 OUTPUT，上电/初始化无毛刺）。
-// offLevel 取该路驱动的关闭电平：水泵=PUMP_OFF(LOW)、风扇=FAN_OFF(HIGH)。
+// offLevel 取该路驱动的关闭电平（水泵=PUMP_OFF、风扇=FAN_OFF，见上方宏）。
 static void pinInitSafe(uint8_t pin, int offLevel) {
   digitalWrite(pin, offLevel);   // 先置关闭电平
   pinMode(pin, OUTPUT);          // 再切输出（切换瞬间即为关，不会误触发）
@@ -59,7 +59,7 @@ uint8_t ActuatorCtrl::servoGet() const {
 
 bool ActuatorCtrl::begin() {
   // 1) 水泵/风扇全部进入安全态（关闭）
-  pinInitSafe(PUMP_PIN, PUMP_OFF);    // 水泵关=输出高电平
+  pinInitSafe(PUMP_PIN, PUMP_OFF);    // 水泵关=输出低电平
   pinInitSafe(FAN_FWD_PIN, FAN_OFF);
   pinInitSafe(FAN_REV_PIN, FAN_OFF);
   _p->pumpOn = false;
@@ -79,19 +79,19 @@ void ActuatorCtrl::handle() {
   // 预留：舵机缓动、水泵超时自动停等安全逻辑；当前无周期任务。
 }
 
-// ---- 水泵（低触发·推挽：开=输出低，关=输出高） ----
-// 关态主动驱动高电平，不依赖浮空/模块上拉；上电/复位瞬间 GPIO0 输入态被上拉≈高=关。
-// 注意：烧录时 GPIO0 被拉低=泵会开启（烧录全程），烧录前建议断泵体电源。
+// ---- 水泵（高触发·推挽：开=输出高，关=输出低） ----
+// 关态主动驱动低电平，不依赖浮空/模块上拉；GPIO0 烧录时拉低=泵关（安全）；
+// 上电瞬间 GPIO0 输入态被上拉≈高会短暂开泵几十 ms，电机响应慢通常无感。
 
 void ActuatorCtrl::pumpOn() {
-  digitalWrite(PUMP_PIN, PUMP_ON);    // 先写低（此时仍输入态，引脚不变）
-  pinMode(PUMP_PIN, OUTPUT);          // 再切输出 → 无毛刺输出低电平开泵
+  digitalWrite(PUMP_PIN, PUMP_ON);    // 先写高（此时仍输入态，引脚不变）
+  pinMode(PUMP_PIN, OUTPUT);          // 再切输出 → 无毛刺输出高电平开泵
   _p->pumpOn = true;
   Serial.println(F("[act] 水泵 开"));
 }
 
 void ActuatorCtrl::pumpOff() {
-  digitalWrite(PUMP_PIN, PUMP_OFF);   // 先写高（防毛刺），输出高电平关泵
+  digitalWrite(PUMP_PIN, PUMP_OFF);   // 先写低（防毛刺），输出低电平关泵
   pinMode(PUMP_PIN, OUTPUT);
   digitalWrite(PUMP_PIN, PUMP_OFF);
   _p->pumpOn = false;
@@ -141,7 +141,7 @@ void ActuatorCtrl::servoSet(uint8_t deg) {
 void ActuatorCtrl::selfTest() {
   Serial.println(F("[act] ==== 上电自检：逐个激活执行器 0.5s ===="));
 
-  pumpOn();                       // 水泵开 0.5s（低触发）
+  pumpOn();                       // 水泵开 0.5s（高触发）
   delay(500);
   pumpOff();
   delay(200);
