@@ -156,8 +156,8 @@ footer{text-align:center;color:var(--mut);font-size:11px;margin:8px 0}
       <div class="actrow"><span class="lbl">高温</span><input type="number" id="ac_t" step="0.5" min="0"><span class="unit">℃ 触发风扇正转</span></div>
       <div class="actrow"><span class="lbl">CO₂</span><input type="number" id="ac_co2" step="50" min="0"><span class="unit">ppm 触发风扇正转</span></div>
       <div class="actrow"><span class="lbl">高湿</span><input type="number" id="ac_h" step="1" min="0"><span class="unit">% 触发风扇反转排湿</span></div>
-      <div class="actrow"><span class="lbl">土壤干</span><input type="number" id="ac_sd" step="1" min="0" max="100"><span class="unit">% 触发水泵浇水</span></div>
-      <div class="actrow"><span class="lbl">土壤湿</span><input type="number" id="ac_sw" step="1" min="0" max="100"><span class="unit">% 解除浇水（仅模拟量从机）</span></div>
+      <div class="actrow"><span class="lbl">土壤干</span><input type="number" id="ac_sd" step="10" min="0" max="1023"><span class="unit">原始值 ≥此触发水泵浇水</span></div>
+      <div class="actrow"><span class="lbl">土壤湿</span><input type="number" id="ac_sw" step="10" min="0" max="1023"><span class="unit">原始值 ≤此解除浇水（仅模拟量从机）</span></div>
       <div class="actrow"><button id="saveBtn" class="btn green" onclick="saveAuto()">保存阈值</button></div>
       <div id="rules"></div>
     </div>
@@ -211,8 +211,8 @@ function ghTxt(s){return s===0?'关棚':(s===180?'开棚':s+'°')}
 function metricHTML(d,m){
  if(m.soil){
   if(d.soil===null)return '<div class="mi"><div class="k">土壤</div><div class="v">--</div><div class="bar"><i style="width:0"></i></div></div>';
-  /* 百分比端口(F8266-2 模拟 AO):显数值 0~100(低=湿 高=干),超干阈值变警示 */
-  if(d.soilPct)return '<div class="mi"><div class="k">土壤</div><div class="v">'+d.soil+'<small>%</small></div><div class="bar"><i class="'+(d.soil>=d.soilDry?'warn':'')+'" style="width:'+d.soil+'%"></i></div></div>';
+  /* 原始值端口(F8266-2 模拟 AO):显原始值 0~1023(低=湿 高=干),进度条按满量程,超干阈值变警示 */
+  if(d.soilRaw)return '<div class="mi"><div class="k">土壤</div><div class="v">'+d.soil+'</div><div class="bar"><i class="'+(d.soil>=d.soilDry?'warn':'')+'" style="width:'+Math.min(d.soil*100/1023,100)+'%"></i></div></div>';
   return '<div class="mi"><div class="k">土壤</div><div class="v">'+(d.soil===1?'湿润':'干燥')+'</div><div class="bar"><i class="'+(d.soil===1?'ok':'warn')+'" style="width:'+(d.soil===1?100:20)+'%"></i></div></div>';
  }
  if(d[m.k]===null)return '<div class="mi"><div class="k">'+m.n+'</div><div class="v">--</div><div class="bar"><i style="width:0"></i></div></div>';
@@ -252,7 +252,7 @@ function updateDetail(){
  METRICS.forEach(m=>{
   if(m.soil){
    if(d.soil===null){q('v_soil','--');el('b_soil').style.width='0'}
-   else if(d.soilPct){q('v_soil',d.soil+'%');const b=el('b_soil');b.style.width=d.soil+'%';b.className=d.soil>=d.soilDry?'warn':''}
+   else if(d.soilRaw){q('v_soil',String(d.soil));const b=el('b_soil');b.style.width=Math.min(d.soil*100/1023,100)+'%';b.className=d.soil>=d.soilDry?'warn':''}
    else{q('v_soil',d.soil===1?'湿润':'干燥');const b=el('b_soil');b.style.width=d.soil===1?'100%':'20%';b.className=d.soil===1?'ok':'warn'}
   }else{
    const v=d[m.k];
@@ -318,9 +318,9 @@ async function refreshAuto(){
    el('ac_sd').value=d.soilDry;el('ac_sw').value=d.soilWet;
    autoInited[d.port]=true;
   }
-  /* 土壤双阈值仅对百分比端口生效,两态口置灰禁用 */
-  const pct=PD&&PD[sel]&&PD[sel].soilPct;
-  el('ac_sd').disabled=el('ac_sw').disabled=!pct;
+  /* 土壤双阈值仅对原始值端口生效,两态口置灰禁用 */
+  const raw=PD&&PD[sel]&&PD[sel].soilRaw;
+  el('ac_sd').disabled=el('ac_sw').disabled=!raw;
   const b=el('autoBtn');
   b.textContent=d.enabled?'自动':'手动';
   b.className='btn '+(d.enabled?'green':'gray');
@@ -476,8 +476,8 @@ static void handlePorts() {
     j += ",\"h\":" + numOrNull(s.h);
     j += ",\"lux\":" + (isnan(s.lux) ? String("null") : String((int)s.lux));
     j += ",\"soil\":" + (s.soil < 0 ? String("null") : String(s.soil));
-    j += ",\"soilPct\":" + String(PORT_SOIL_PCT[i] ? "true" : "false");   // true=百分比口(数值 0~100)
-    j += ",\"soilDry\":" + String(auto_ctrl::getConfig(i).soilDry, 0);    // 百分比口干阈值(网页警示色用)
+    j += ",\"soilRaw\":" + String(PORT_SOIL_RAW[i] ? "true" : "false");   // true=原始值口(数值 0~1023)
+    j += ",\"soilDry\":" + String(auto_ctrl::getConfig(i).soilDry, 0);    // 原始值口干阈值(网页警示色用)
     j += ",\"co2\":" + (isnan(s.co2) ? String("null") : String((int)s.co2));
     j += ",\"tvoc\":" + (isnan(s.tvoc) ? String("null") : String((int)s.tvoc));
     // 执行器实时状态

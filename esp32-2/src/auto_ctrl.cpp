@@ -64,14 +64,14 @@ bool overCo2(const Config &c, float v)   { return !isnan(v) && v >= c.co2High; }
 bool safeCo2(const Config &c, float v)   { return !isnan(v) && v <= c.co2High - AC_CO2_HYST; }
 bool overHum(const Config &c, float h)   { return !isnan(h) && h >= c.hHigh; }
 bool safeHum(const Config &c, float h)   { return !isnan(h) && h <= c.hHigh - AC_H_HYST; }
-// 土壤越界/回安全(按端口双模式:pct=true 为百分比口 0~100 低=湿高=干):
-// 两态口 0=干 1=湿;百分比口 ≥soilDry 判干 / ≤soilWet 判湿,之间保持(滞回)。
+// 土壤越界/回安全(按端口双模式:raw=true 为原始值口 0~1023 低=湿高=干):
+// 两态口 0=干 1=湿;原始值口 ≥soilDry 判干 / ≤soilWet 判湿,之间保持(滞回)。
 // s<0(无数据)恒返回 false:既不触发也不解除,维持现状。
-bool overSoil(const Config &c, bool pct, int8_t s) {
-  return s >= 0 && (pct ? s >= c.soilDry : s == 0);
+bool overSoil(const Config &c, bool raw, int16_t s) {
+  return s >= 0 && (raw ? s >= c.soilDry : s == 0);
 }
-bool safeSoil(const Config &c, bool pct, int8_t s) {
-  return s >= 0 && (pct ? s <= c.soilWet : s == 1);
+bool safeSoil(const Config &c, bool raw, int16_t s) {
+  return s >= 0 && (raw ? s <= c.soilWet : s == 1);
 }
 
 // 大棚(舵机)越界/回安全区(滞回用 AC_OVER_FACTOR)
@@ -145,8 +145,8 @@ void loop() {
     updateRule(p.rules[R_TEMP], overTemp(p.cfg, s.t), safeTemp(p.cfg, s.t));
     updateRule(p.rules[R_CO2],  overCo2(p.cfg, s.co2), safeCo2(p.cfg, s.co2));
     updateRule(p.rules[R_HUMH], overHum(p.cfg, s.h),   safeHum(p.cfg, s.h));
-    updateRule(p.rules[R_SOIL], overSoil(p.cfg, PORT_SOIL_PCT[idx], s.soil),
-                                safeSoil(p.cfg, PORT_SOIL_PCT[idx], s.soil));
+    updateRule(p.rules[R_SOIL], overSoil(p.cfg, PORT_SOIL_RAW[idx], s.soil),
+                                safeSoil(p.cfg, PORT_SOIL_RAW[idx], s.soil));
     updateGh(p, overGh(p.cfg, s.t, s.co2, s.h), safeGh(p.cfg, s.t, s.co2, s.h));
 
     // ---- 期望状态(由规则聚合) ----

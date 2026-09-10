@@ -22,7 +22,7 @@ struct PortCtx {
   // 从机上报的最新传感数据
   bool        hasData = false;
   float       t = NAN, h = NAN, lux = NAN, co2 = NAN, tvoc = NAN;
-  int8_t      soil = -1;
+  int16_t     soil = -1;             // -1=无;两态口 0=干/1=湿;原始值口 0~1023 低=湿高=干(见 config.h PORT_SOIL_RAW)
   // 从机上报的执行器实时状态
   uint8_t     pump = 0, fan = 0, servo = 90;
 };
@@ -72,7 +72,7 @@ static void parseData(PortCtx &p, const String &cmd) {
   p.t    = doc["t"].is<float>()    ? doc["t"].as<float>()    : NAN;
   p.h    = doc["h"].is<float>()    ? doc["h"].as<float>()    : NAN;
   p.lux  = doc["lux"].is<float>()  ? doc["lux"].as<float>()  : NAN;
-  p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;  // 两态 0/1 或百分比 0~100,按端口模式区分(PORT_SOIL_PCT)
+  p.soil = doc["soil"].is<int>()   ? doc["soil"].as<int>()   : -1;  // 两态 0/1 或原始值 0~1023,按端口模式区分(PORT_SOIL_RAW)
   p.co2  = doc["co2"].is<float>()  ? doc["co2"].as<float>()  : NAN;
   p.tvoc = doc["tvoc"].is<float>() ? doc["tvoc"].as<float>() : NAN;
   // 执行器状态:缺失字段保留旧值(旧固件兼容)

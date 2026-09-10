@@ -10,9 +10,6 @@
 // 连续 N 个周期贴顶仅串口提醒（接线排障用；湿/干判定已上移主机，此处无阈值逻辑）。
 #define SOIL_PEGGED_RAW   1015   // “贴顶”判定下限
 #define SOIL_PEGGED_STREAK  10   // 连续贴顶 N 个周期（默认 10s）打印提醒
-// 百分比满量程：4:1 分压下 AO 满摆幅 3.3V→A0 0.825V≈840 counts（设计估算值），
-// pct = raw×100/840（低=湿 高=干，越界夹取 0~100）。
-#define SOIL_FULL_SCALE   840
 
 // ===================== 实现体 =====================
 struct SoilSensor::Impl {
@@ -51,13 +48,6 @@ SoilSensor::~SoilSensor() {
 
 int SoilSensor::getRaw() const {
   return _p->raw;
-}
-
-uint8_t SoilSensor::getPct() const {
-  int pct = (long)_p->raw * 100 / SOIL_FULL_SCALE;   // 低=湿 高=干
-  if (pct < 0) pct = 0;
-  if (pct > 100) pct = 100;
-  return (uint8_t)pct;
 }
 
 bool SoilSensor::begin() {

@@ -14,7 +14,7 @@ WifiNet net;
 HostLink link;        // F8266-2 从机 → esp32-1 主机(NET_HOST_PORT) 的 TCP 链路
 OledCtrl oled;        // 智慧农场状态可视化层（信息行由各子系统写入）
 Gy39Sensor gy39;      // 子系统①：气象二合一（GY-39，I2C 0x5B 共线：温湿度/气压/光照，替代 SHT30+GY-30）
-SoilSensor soil;      // 子系统②：土壤湿度采集（AO→分压→A0，3V3 供电，中值滤波+百分比读数）
+SoilSensor soil;      // 子系统②：土壤湿度采集（AO→分压→A0，3V3 供电，中值滤波+原始值上报）
 Sgp30Sensor sgp30;    // 子系统③：空气质量 eCO₂/TVOC（SGP30，I2C 0x58，共线）
 ActuatorCtrl act;     // 执行实体：水泵（GPIO0）/风扇正反转（GPIO13/2）/舵机（GPIO12）
 
@@ -52,7 +52,7 @@ static void reportSensors() {
   j += F(",\"lux\":");
   j += gy39.hasLux() ? String((unsigned)gy39.getLux()) : F("null");
   j += F(",\"soil\":");
-  j += String((unsigned)soil.getPct());      // 湿度读数百分比 0~100（低=湿 高=干，判定在主机）
+  j += String(soil.getRaw());                // 滤波原始值 0~1023（低=湿 高=干，判定在主机）
   j += F(",\"co2\":");
   j += sgp30.hasData() ? String((unsigned)sgp30.getEco2Ppm()) : F("null");
   j += F(",\"tvoc\":");
@@ -90,7 +90,7 @@ void setup() {
   // 子系统①：GY-39 气象二合一（同一 I2C 总线；未检测到不阻塞启动，handle 内自愈重扫）
   gy39.begin();
 
-  // 子系统②：土壤湿度传感器（AO 模拟量经分压→A0；低=湿 高=干，中值滤波+百分比；判定在主机）
+  // 子系统②：土壤湿度传感器（AO 模拟量经分压→A0；低=湿 高=干，中值滤波+原始值；判定在主机）
   soil.begin();
 
   // 子系统③：SGP30 空气质量传感器（同一 I2C 总线；eCO₂ 为 TVOC 推算等效值，15s 暖机）
@@ -118,7 +118,7 @@ void loop() {
   link.handle();   // 主机链路周期维护（连接/收发/断线重连）
   oled.handle();   // OLED 周期维护（预留整页状态渲染）
   gy39.handle();   // 子系统①：气象二合一周期采集（温湿度/气压/光照 + 健康判定 + 热插拔重扫）
-  soil.handle();   // 子系统②：土壤湿度周期采集（中值滤波 + 百分比读数更新）
+  soil.handle();   // 子系统②：土壤湿度周期采集（中值滤波，原始值更新）
   sgp30.handle();  // 子系统③：空气质量周期采集（暖机/健康/热插拔重扫）
   act.handle();    // 执行实体周期维护（预留：缓动/超时保护）
 
@@ -173,10 +173,10 @@ void loop() {
       oled.setInfoLine(1, line);
     }
 
-    // 行 2：土壤湿度读数百分比（滤波值折算，低=湿 高=干；判定与阈值在主机侧）
+    // 行 2：土壤湿度滤波原始值（0~1023，低=湿 高=干；判定与阈值在主机侧）
     {
       char line[24];
-      snprintf(line, sizeof(line), "SOIL:%u%%", (unsigned)soil.getPct());
+      snprintf(line, sizeof(line), "SOIL:%d", soil.getRaw());
       oled.setInfoLine(2, line);
     }
 

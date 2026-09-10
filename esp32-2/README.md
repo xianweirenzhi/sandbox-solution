@@ -24,7 +24,7 @@
 
 - [x] **从机总览**：六从机卡片同屏（在线状态/端口/收发计数），每卡 6 指标迷你进度条（温度/湿度/光照/土壤/CO₂/TVOC）+ 执行器状态章（泵/扇/棚），点击卡片直达该从机详情
 - [x] **从机详情**：传感大卡（大数值 + 进度条 + **近 60 点迷你趋势折线**，canvas 绘制）+ 执行器控制（水泵开关/风扇正反转停/舵机滑条，命令下发到该从机端口）+ **该从机独立的自动控制卡**（手动/自动切换、5 阈值编辑保存、4 规则触发状态）
-- [x] **每端口独立自动控制**：`auto_ctrl` 由单实例改为 `PORT_COUNT` 实例数组，规则不变（高温/高CO₂→风扇正转、高湿→反转排湿、超阈 120% 开大棚、土壤干→水泵，滞回 + 连续 3 次确认 + 每周期按回报校正）；**土壤判定按端口双模式**（`config.h` 的 `PORT_SOIL_PCT`）——数字两态口 0=干/1=湿（F8266-1）；百分比口（F8266-2）读数 0~100 低=湿高=干，≥干阈值（`soilDry`）触发浇水、≤湿阈值（`soilWet`）解除，双阈值网页可调（默认 67/43）；配置按端口序号存 NVS（键 `en0/tHi0/...~en5/tHi5`，土壤 `sWt/sDr`），互不干扰
+- [x] **每端口独立自动控制**：`auto_ctrl` 由单实例改为 `PORT_COUNT` 实例数组，规则不变（高温/高CO₂→风扇正转、高湿→反转排湿、超阈 120% 开大棚、土壤干→水泵，滞回 + 连续 3 次确认 + 每周期按回报校正）；**土壤判定按端口双模式**（`config.h` 的 `PORT_SOIL_RAW`）——数字两态口 0=干/1=湿（F8266-1）；原始值口（F8266-2）读数 0~1023 低=湿高=干，≥干阈值（`soilDry`）触发浇水、≤湿阈值（`soilWet`）解除，双阈值网页可调（默认 560/360 原始值口径；实测该模块摆幅仅 ~40~90，须按网页读数标定）；配置按端口序号存 NVS（键 `en0/tHi0/...~en5/tHi5`，土壤 `sWt/sDr`），互不干扰
 - [x] **响应式布局**：CSS Grid `auto-fill/minmax` 自适应——手机竖屏单列/两列，平板两列，PC 宽屏三列以上（最大 1160px）；顶栏吸顶
 - [x] **深色模式**：跟随系统 `prefers-color-scheme`，无需手动切换
 - [x] `/api/auto` 升级：GET/POST 均支持 `port` 参数（缺省 8000，兼容原用法）
@@ -118,7 +118,7 @@ pio device monitor                # 串口监视
 - **总览卡**点击 → 平滑滚动到该从机详情；详情标签可随时切换从机
 - **趋势折线**：详情页每指标保留近 60 个采样（约 1.5 分钟），切换从机后重新累积
 - **手动模式**：执行器按键/滑条直接下发到选中从机端口
-- **自动模式**：每从机独立开关与阈值（存 NVS，重启保留）；规则触发状态红点实时显示；土壤干/湿双阈值仅对百分比从机（F8266-2）启用，其余端口置灰
+- **自动模式**：每从机独立开关与阈值（存 NVS，重启保留）；规则触发状态红点实时显示；土壤干/湿双阈值（原始值 0~1023 口径）仅对模拟量从机（F8266-2）启用，其余端口置灰
 - **通信日志**：二级页六端口收发记录 + 每端口手动发送框（PC 三列/手机两列）
 
 ## 8. Web 接口文档
@@ -127,7 +127,7 @@ pio device monitor                # 串口监视
 |---|---|---|
 | `/` | GET | 控制中心页面 v2（响应式仪表盘，存于 Flash/PROGMEM） |
 | `/api/status` | GET | 设备状态 JSON（同 esp32-1） |
-| `/api/ports` | GET | 6 端口状态 + 最新传感数据 JSON 数组（同 esp32-1）；**新增** `soilPct`（该端口土壤是否百分比模式）与 `soilDry`（干阈值，网页警示色用）字段 |
+| `/api/ports` | GET | 6 端口状态 + 最新传感数据 JSON 数组（同 esp32-1）；**新增** `soilRaw`（该端口土壤是否原始值 0~1023 模式）与 `soilDry`（干阈值，网页警示色用）字段 |
 | `/api/send` | POST | 向指定端口发报文/命令，参数 `port`、`text`（同 esp32-1） |
 | `/api/auto` | GET | **升级**：参数 `port`（8000~8005，缺省 8000），返回该端口配置 `enabled/tHigh/co2High/hHigh/soilWet/soilDry`、期望状态 `fanDir/pumpActive/servoActive` 与 4 条规则触发状态 |
 | `/api/auto` | POST | **升级**：参数 `port` + `enabled/tHigh/co2High/hHigh/soilWet/soilDry`（干阈值须大于湿阈值），写入该端口 NVS |
@@ -139,9 +139,10 @@ pio device monitor                # 串口监视
 
 | 文件 | 差异 |
 |---|---|
-| `src/web_ui.cpp` | INDEX_HTML 全量重写（响应式仪表盘 + canvas 趋势线 + 每从机控制）；`handleGetAuto/handleSetAuto` 增加 `port` 参数（`autoIdxFromArg()` 解析与校验）；**土壤百分比模式**：土壤卡数值显示（仅 `soilPct` 端口，超干阈值警示色）+ 自动控制卡土壤干/湿双阈值输入（非百分比端口置灰）+ `/api/ports` 增 `soilPct/soilDry`、`/api/auto` 增 `soilWet/soilDry` |
-| `src/auto_ctrl.h/.cpp` | 单实例 → `PortAuto s_pa[PORT_COUNT]` 每端口实例；`getConfig/setConfig/fanDir/pumpActive/servoActive/ruleState` 增加 `idx` 参数；NVS 键名按端口序号后缀化；**土壤判定双模式**（两态 0/1 / 百分比 0~100 低=湿高=干）+ `soilWet/soilDry` 双阈值（NVS 键 `sWt/sDr`） |
-| `src/config.h` | `FALLBACK_AP_SSID`、`MDNS_HOST` 身份差异化；土壤端口模式表 `PORT_SOIL_PCT` + 土壤阈值默认 `AC_SOIL_WET/AC_SOIL_DRY` |
+| `src/web_ui.cpp` | INDEX_HTML 全量重写（响应式仪表盘 + canvas 趋势线 + 每从机控制）；`handleGetAuto/handleSetAuto` 增加 `port` 参数（`autoIdxFromArg()` 解析与校验）；**土壤原始值模式**：土壤卡数值显示（仅 `soilRaw` 端口，超干阈值警示色）+ 自动控制卡土壤干/湿双阈值输入（非原始值端口置灰）+ `/api/ports` 增 `soilRaw/soilDry`、`/api/auto` 增 `soilWet/soilDry` |
+| `src/auto_ctrl.h/.cpp` | 单实例 → `PortAuto s_pa[PORT_COUNT]` 每端口实例；`getConfig/setConfig/fanDir/pumpActive/servoActive/ruleState` 增加 `idx` 参数；NVS 键名按端口序号后缀化；**土壤判定双模式**（两态 0/1 / 原始值 0~1023 低=湿高=干）+ `soilWet/soilDry` 双阈值（NVS 键 `sWt/sDr`，默认 360/560） |
+| `src/config.h` | `FALLBACK_AP_SSID`、`MDNS_HOST` 身份差异化；土壤端口模式表 `PORT_SOIL_RAW` + 土壤阈值默认 `AC_SOIL_WET/AC_SOIL_DRY` |
+| `src/port_service.h/.cpp` | 与 esp32-1 一致，仅 `soil` 字段 int8_t→**int16_t**（容纳原始值 0~1023，两态 0/1 与 -1 无数据不变） |
 | `platformio.ini` | 环境名 `[env:esp32_2]` |
 | 其余文件 | 与 esp32-1 相同 |
 
